@@ -38,13 +38,9 @@ private:
     std::chrono::milliseconds binc;
     std::chrono::milliseconds lastTime = get_current_time();
     std::chrono::milliseconds timePerMove;
-    Board board;
     bool stop = false;
 
 public:
-    Search(Board& board){
-        this->board = board;
-    };
     void set_timer(std::chrono::milliseconds wtime, std::chrono::milliseconds btime, std::chrono::milliseconds timePerMove, std::chrono::milliseconds winc = std::chrono::milliseconds(0), std::chrono::milliseconds binc = std::chrono::milliseconds(0))
     {
         /*std::cout << wtime.count() << std::endl;
@@ -52,7 +48,7 @@ public:
         std::cout << timePerMove.count() << std::endl;
         std::cout << winc.count() << std::endl;
         std::cout << binc.count() << std::endl;*/
-        
+
         this->wtime = wtime;
         this->btime = btime;
         this->winc = winc;
@@ -69,14 +65,14 @@ public:
         }
         if (get_current_time() - this->lastTime >= this->timePerMove)
         {
-            //std::cout << get_current_time().count() - this->lastTime.count() << std::endl;
+            // std::cout << get_current_time().count() - this->lastTime.count() << std::endl;
             this->stop = true;
             this->lastTime = get_current_time();
             return true;
         }
         return false;
     }
-    int quiesce(Board &board, int alpha, int beta, int ply)
+    int quiesce(Board& board, int alpha, int beta, int ply)
     {
 
         if (ply >= MAX_PLY)
@@ -119,14 +115,19 @@ public:
         return alpha;
     }
 
-    int alpha_beta(Board &board, PV &pv, int alpha, int beta, int depth, int ply, bool& finishedDepth)
+    int alpha_beta(Board& board, PV &pv, int alpha, int beta, int depth, int ply, bool &finishedDepth)
     {
-        if (this->check_time() || this->stop){
+        if (this->check_time() || this->stop)
+        {
             return 0;
         }
         int best = -BEST_SCORE;
 
         if (ply >= MAX_PLY)
+        {
+            return eval(board);
+        }
+        if (ply > MAX_DEPTH - 1)
         {
             return eval(board);
         }
@@ -141,8 +142,11 @@ public:
         Movegen::legalmoves<ALL>(board, moveslist);
 
         U64 hashKey = board.hashKey;
-
         TTEntry tte = transposition_table.probeEntry(hashKey);
+
+        this->give_moves_score(moveslist, tte.move, board);
+        std::sort(moveslist.list, moveslist.list + moveslist.size, [](ExtMove a, ExtMove b)
+                  { return (a.value > b.value); });
 
         if ((ply != 0) && (hashKey == tte.key) && (tte.depth >= depth))
         {
@@ -212,13 +216,17 @@ public:
         }
 
         transposition_table.storeEntry(hashKey, bound, pv.moves[0], depth, best);
-        if (this->check_time() || this->stop){
+        if (this->check_time() || this->stop)
+        {
             finishedDepth = false;
-        }else{
+        }
+        else
+        {
             finishedDepth = true;
         }
         return alpha;
     }
+
     void iterative_deepening(Board& board, int target_depth = 100)
     {
         int alpha = -100000;
@@ -228,34 +236,57 @@ public:
         std::chrono::milliseconds start_time = get_current_time();
         for (int depth = 1; depth <= target_depth; depth++)
         {
-            if ((this->check_time()) || (this->stop)){
-                //std::cout << "breaking" << std::endl;
+            if (depth > 2 && ((this->check_time()) || (this->stop)))
+            {
+                // std::cout << "TIME UP AT DEPTH " << depth << std::endl;
+                //  std::cout << "breaking" << std::endl;
                 break;
-            }else{
-                PV pv;
-                bool finishedDepth = false;
-                int currentScore = this->alpha_beta(board, pv, alpha, beta, depth, 0, finishedDepth);
-                pvhistory[depth] = pv;
-                if (finishedDepth == false){
-                    lastDepth = depth-1;
-                }else{
-                    std::cout << "info depth " << depth;
-                    std::cout << " score cp " << currentScore;
-                    std::cout << " time " << (get_current_time() - start_time).count() << "\n";
-                }
             }
-            
+            PV pv;
+            bool finishedDepth = false;
+            int currentScore = this->alpha_beta(board, pv, alpha, beta, depth, 0, finishedDepth);
+            pvhistory[depth] = pv;
+            if (finishedDepth == false)
+            {
+                lastDepth = depth - 1;
+            }
+            else
+            {
+                std::cout << "info depth " << depth;
+                std::cout << " score cp " << currentScore;
+                std::cout << " time " << (get_current_time() - start_time).count() << "\n";
+            }
         }
         std::cout << "bestmove " << convertMoveToUci(pvhistory[lastDepth].moves[0]) << std::endl;
     }
-    int score_move(Board& board, Move move, Move tt_move = NO_MOVE){
-        if (move == tt_move){
+
+    int score_move(Board& board, Move move, Move tt_move = NO_MOVE)
+    {
+        // Piece attacker = board.pieceAtB(from(move));
+        Piece victim = board.pieceAtB(to(move));
+        if (move == tt_move)
+        {
             return TT_SCORE;
         }
-        if (board.pieceAtB(to(move))){
-            return CAPTURE_SCORE;
-        }else{
-            return NON_CAPTURE_SCORE;
+        if (promoted(move))
+        {
+            return PROMOTED_SCORE;
+        }
+        if (victim != None)
+        {
+            return CAPTURE_SCORE - values[victim];
+        }
+        else
+        {
+            return 0;
+        }
+    }
+
+    void give_moves_score(Movelist& movelist, Move ttmove, Board& board)
+    {
+        for (int i = 0; i < int(movelist.size); i++)
+        {
+            movelist[i].value = this->score_move(board, movelist[i].move, ttmove);
         }
     }
 };

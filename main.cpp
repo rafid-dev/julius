@@ -6,7 +6,7 @@ using namespace Chess;
 
 void uci_send_id()
 {
-    std::cout << "id name Julius\n";
+    std::cout << "id name Julius 1.1.0\n";
     std::cout << "id author Slender\n";
     std::cout << "uciok\n";
 }
@@ -43,8 +43,8 @@ int main()
 {
     init_tables();
     // main game loop
+    Search search;
     Board board(DEFAULT_POS);
-    Search search(board);
     std::string command;
     std::string token;
     while (true)
@@ -87,7 +87,7 @@ int main()
 
                 while (is >> moveString)
                 {
-                    std::cout << moveString << std::endl;
+                    //std::cout << moveString << std::endl;
                     board.makeMove(convertUciToMove(board, moveString));
                 }
             }else{
@@ -135,7 +135,7 @@ int main()
                     moveTime = (board.sideToMove == Black) ? (btime / 20 + (binc / 2)) : (wtime / 20 + (binc / 2));
                 }
                 search.set_timer(std::chrono::milliseconds(wtime), std::chrono::milliseconds(btime), std::chrono::milliseconds(moveTime), std::chrono::milliseconds(winc), std::chrono::milliseconds(binc));
-                search.iterative_deepening(board, 100);
+                search.iterative_deepening(board, MAX_DEPTH);
             }
             //}
             // is >> std::skipws >> token;
@@ -157,14 +157,6 @@ int main()
             {
                 std::cout << convertMoveToUci(moveslist[i].move) << std::endl;
             }
-        }
-        else if (token == "checktime")
-        {
-            std::cout << search.check_time() << std::endl;
-        }else if (token == "alphabeta"){
-            PV pv;
-            //search.alpha_beta(board, pv, -100000, 100000, 5, 0);
-            std::cout << pv.moves[0] << std::endl;
         }
     }
 

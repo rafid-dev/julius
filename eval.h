@@ -6,9 +6,11 @@
 #define MATE_SCORE 9999999
 #define DRAW_SCORE 0
 #define TT_SCORE 1000000
-#define CAPTURE_SCORE 100000
-#define NON_CAPTURE_SCORE 50000
+#define PROMOTED_SCORE 50000
+#define CAPTURE_SCORE 32000
+#define MAX_DEPTH 256
 
+int values[6] = {100,300, 300, 500, 900, 0};
 int gamephaseInc[12] = {0,0,1,1,1,1,2,2,4,4,0,0};
 int mg_value[6] = { 82, 337, 365, 477, 1025,  0};
 int eg_value[6] = { 94, 281, 297, 512,  936,  0};
