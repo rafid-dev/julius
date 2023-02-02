@@ -22,12 +22,28 @@ struct PV
     }
 };
 
+struct PVHistory
+{
+    int length = 0;
+    PV pv_list[MAX_DEPTH];
+    void add_pv(PV& pv, int depth){
+        pv_list[depth] = pv;
+        length += 1;
+    }
+    void clear(){
+        for (int i = 0; i < length;i++){
+            pv_list[i] = PV();
+        }
+    }
+};
+
 std::chrono::milliseconds get_current_time()
 {
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
 }
 
 TranspositionTable transposition_table(16 * 1024 * 1024);
+PVHistory pv_history;
 
 class Search
 {
@@ -117,14 +133,14 @@ public:
 
     int alpha_beta(Board& board, PV &pv, int alpha, int beta, int depth, int ply, bool &finishedDepth)
     {
-        if (this->check_time() || this->stop)
+        if (depth > 2 && this->check_time() || this->stop)
         {
             return 0;
         }
         int best = -BEST_SCORE;
 
         if (ply >= MAX_PLY)
-        {
+        {   
             return eval(board);
         }
         if (ply > MAX_DEPTH - 1)
@@ -232,7 +248,7 @@ public:
         int alpha = -100000;
         int beta = 100000;
         int lastDepth;
-        PV pvhistory[target_depth];
+        pv_history.clear();
         std::chrono::milliseconds start_time = get_current_time();
         for (int depth = 1; depth <= target_depth; depth++)
         {
@@ -242,10 +258,13 @@ public:
                 //  std::cout << "breaking" << std::endl;
                 break;
             }
+            if (depth == MAX_DEPTH){
+                break;
+            }
             PV pv;
             bool finishedDepth = false;
             int currentScore = this->alpha_beta(board, pv, alpha, beta, depth, 0, finishedDepth);
-            pvhistory[depth] = pv;
+            pv_history.add_pv(pv, depth);
             if (finishedDepth == false)
             {
                 lastDepth = depth - 1;
@@ -257,7 +276,15 @@ public:
                 std::cout << " time " << (get_current_time() - start_time).count() << "\n";
             }
         }
-        std::cout << "bestmove " << convertMoveToUci(pvhistory[lastDepth].moves[0]) << std::endl;
+        std::cout << "bestmove " << convertMoveToUci(pv_history.pv_list[lastDepth].moves[0]) << std::endl;
+        for (int i = 0; i < target_depth; i++){
+            PV pv = pv_history.pv_list[i];
+            std::cout << pv.length << std::endl;
+            for (int i2 = 0; i2 < pv.length; i2++){
+                std::cout << "depth: " << i << " ";
+                std::cout << convertMoveToUci(pv.moves[i2]) << "\n";
+            }
+        }
     }
 
     int score_move(Board& board, Move move, Move tt_move = NO_MOVE)

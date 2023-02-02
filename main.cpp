@@ -49,6 +49,7 @@ int main()
     std::string token;
     while (true)
     {
+        std::cout.flush();
         token.clear();
 
         std::getline(std::cin, command);

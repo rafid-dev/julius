@@ -8,7 +8,7 @@
 #define TT_SCORE 1000000
 #define PROMOTED_SCORE 50000
 #define CAPTURE_SCORE 32000
-#define MAX_DEPTH 256
+#define MAX_DEPTH 64
 
 int values[6] = {100,300, 300, 500, 900, 0};
 int gamephaseInc[12] = {0,0,1,1,1,1,2,2,4,4,0,0};
