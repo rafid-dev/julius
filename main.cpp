@@ -122,17 +122,17 @@ int main()
         if (token == "go")
         {
             is >> std::skipws >> token;
-            int64_t wtime = 100000*1000;
-            int64_t btime = 100000*1000;
-            int64_t winc = 1000*1000;
-            int64_t binc = 1000*1000;
-            int64_t moveTime = 20*1000;
+            int64_t wtime = 100000;
+            int64_t btime = 100000;
+            int64_t winc = 1000;
+            int64_t binc = 1000;
+            int64_t moveTime = 100*1000;
             if (token == "depth")
             {
                 is >> std::skipws >> token;
                 search.set_timer(std::chrono::microseconds(wtime), std::chrono::milliseconds(btime), std::chrono::milliseconds(INT32_MAX), std::chrono::milliseconds(winc), std::chrono::milliseconds(binc));
                 int target_depth = stoi(token);
-                std::thread();
+                search.iterative_deepening(board, target_depth);
             }
             else
             {
@@ -145,7 +145,7 @@ int main()
                 uci_check_time_inc(is, token, winc, binc);
                 moveTime = (board.sideToMove == Black) ? (btime / 20) + (binc / 2) : (wtime / 20) + (binc / 2);
                 search.set_timer(std::chrono::microseconds(wtime), std::chrono::microseconds(btime), std::chrono::microseconds(moveTime), std::chrono::microseconds(winc), std::chrono::microseconds(binc));
-                search.iterative_deepening(board, MAX_DEPTH);
+                search.iterative_deepening(board, MAX_DEPTH, false);
             }
             //}
             // is >> std::skipws >> token;

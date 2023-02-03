@@ -135,12 +135,12 @@ public:
         return alpha;
     }
 
-    int alpha_beta(Board& board, PV &pv, int alpha, int beta, int depth, int ply)
+    int alpha_beta(Board& board, PV &pv, int alpha, int beta, int depth, int ply, bool is_timed = true)
     {
         if (board.isRepetition()){
             return 0;
         }
-        if (this->check_time())
+        if (this->check_time() && is_timed)
         {
             return 0;
         }
@@ -238,16 +238,16 @@ public:
         return alpha;
     }
 
-    void iterative_deepening(Board& board, int target_depth = 100)
+    void iterative_deepening(Board& board, int target_depth = 100, bool is_timed = true)
     {
         int alpha = -100000;
         int beta = 100000;
-        int lastDepth;
+        int lastDepth = 0;
         pv_history.clear();
         std::chrono::microseconds start_time = get_current_time();
         for (int depth = 1; depth <= target_depth; depth++)
         {
-            if (this->check_time())
+            if (this->check_time() && is_timed)
             {
                 // std::cout << "TIME UP AT DEPTH " << depth << std::endl;
                 //  std::cout << "breaking" << std::endl;
@@ -257,11 +257,17 @@ public:
                 break;
             }
             PV pv;
-            int currentScore = this->alpha_beta(board, pv, alpha, beta, depth, 0);
+            int currentScore = this->alpha_beta(board, pv, alpha, beta, depth, 0, is_timed);
             pv_history.add_pv(pv, depth);
-            std::cout << "info depth " << depth;
-            std::cout << " score cp " << currentScore;
-            std::cout << " time " << (get_current_time() - start_time).count()/1000 << "\n";
+            if (this->check_time()){
+                lastDepth = depth - 1;
+            }else{
+                lastDepth = depth;
+                std::cout << "info depth " << depth;
+                std::cout << " score cp " << currentScore;
+                std::cout << " time " << (get_current_time() - start_time).count()/1000 << "\n";
+            }
+            
         }
         std::cout << "bestmove " << convertMoveToUci(pv_history.pv_list[lastDepth].moves[0]) << "\n";
         /*for (int i = 0; i < target_depth; i++){

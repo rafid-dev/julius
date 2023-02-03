@@ -7,7 +7,6 @@
 #define DRAW_SCORE 0
 #define TT_SCORE 1000000
 #define PROMOTED_SCORE 50000
-#define CAPTURE_SCORE 32000
 #define MAX_DEPTH 64
 
 int values[6] = {100,300, 300, 500, 900, 0};
