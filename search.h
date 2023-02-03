@@ -25,7 +25,7 @@ struct PV
 struct PVHistory
 {
     int length = 0;
-    PV pv_list[MAX_DEPTH];
+    PV pv_list[256];
     void add_pv(PV& pv, int depth){
         pv_list[depth] = pv;
         length += 1;
@@ -34,12 +34,13 @@ struct PVHistory
         for (int i = 0; i < length;i++){
             pv_list[i] = PV();
         }
+        length = 0;
     }
 };
 
-std::chrono::milliseconds get_current_time()
+std::chrono::microseconds get_current_time()
 {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+    return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch());
 }
 
 TranspositionTable transposition_table(16 * 1024 * 1024);
@@ -48,16 +49,19 @@ PVHistory pv_history;
 class Search
 {
 private:
-    std::chrono::milliseconds wtime;
-    std::chrono::milliseconds btime;
-    std::chrono::milliseconds winc;
-    std::chrono::milliseconds binc;
-    std::chrono::milliseconds lastTime = get_current_time();
-    std::chrono::milliseconds timePerMove;
+    std::chrono::microseconds wtime;
+    std::chrono::microseconds btime;
+    std::chrono::microseconds winc;
+    std::chrono::microseconds binc;
+    std::chrono::microseconds lastTime = get_current_time();
+    std::chrono::microseconds timePerMove;
     bool stop = false;
 
 public:
-    void set_timer(std::chrono::milliseconds wtime, std::chrono::milliseconds btime, std::chrono::milliseconds timePerMove, std::chrono::milliseconds winc = std::chrono::milliseconds(0), std::chrono::milliseconds binc = std::chrono::milliseconds(0))
+    void stop_timer(){
+        this->stop = true;
+    }
+    void set_timer(std::chrono::microseconds wtime, std::chrono::microseconds btime, std::chrono::microseconds timePerMove, std::chrono::microseconds winc = std::chrono::microseconds(0), std::chrono::microseconds binc = std::chrono::microseconds(0))
     {
         /*std::cout << wtime.count() << std::endl;
         std::cout << btime.count() << std::endl;
@@ -91,7 +95,7 @@ public:
     int quiesce(Board& board, int alpha, int beta, int ply)
     {
 
-        if (ply >= MAX_PLY)
+        if (ply >= MAX_DEPTH)
             return eval(board);
 
         int best = eval(board);
@@ -131,18 +135,17 @@ public:
         return alpha;
     }
 
-    int alpha_beta(Board& board, PV &pv, int alpha, int beta, int depth, int ply, bool &finishedDepth)
+    int alpha_beta(Board& board, PV &pv, int alpha, int beta, int depth, int ply)
     {
-        if (depth > 2 && this->check_time() || this->stop)
+        if (board.isRepetition()){
+            return 0;
+        }
+        if (this->check_time())
         {
             return 0;
         }
         int best = -BEST_SCORE;
 
-        if (ply >= MAX_PLY)
-        {   
-            return eval(board);
-        }
         if (ply > MAX_DEPTH - 1)
         {
             return eval(board);
@@ -198,7 +201,7 @@ public:
             Move move = moveslist[i].move;
             // std::cout << convertMoveToUci(move) << std::endl;
             board.makeMove(move);
-            int score = -this->alpha_beta(board, local_pv, -beta, -alpha, depth - 1, ply + 1, finishedDepth);
+            int score = -this->alpha_beta(board, local_pv, -beta, -alpha, depth - 1, ply + 1);
             board.unmakeMove(move);
 
             if (score > best)
@@ -232,14 +235,6 @@ public:
         }
 
         transposition_table.storeEntry(hashKey, bound, pv.moves[0], depth, best);
-        if (this->check_time() || this->stop)
-        {
-            finishedDepth = false;
-        }
-        else
-        {
-            finishedDepth = true;
-        }
         return alpha;
     }
 
@@ -249,10 +244,10 @@ public:
         int beta = 100000;
         int lastDepth;
         pv_history.clear();
-        std::chrono::milliseconds start_time = get_current_time();
+        std::chrono::microseconds start_time = get_current_time();
         for (int depth = 1; depth <= target_depth; depth++)
         {
-            if (depth > 2 && ((this->check_time()) || (this->stop)))
+            if (this->check_time())
             {
                 // std::cout << "TIME UP AT DEPTH " << depth << std::endl;
                 //  std::cout << "breaking" << std::endl;
@@ -262,35 +257,28 @@ public:
                 break;
             }
             PV pv;
-            bool finishedDepth = false;
-            int currentScore = this->alpha_beta(board, pv, alpha, beta, depth, 0, finishedDepth);
+            int currentScore = this->alpha_beta(board, pv, alpha, beta, depth, 0);
             pv_history.add_pv(pv, depth);
-            if (finishedDepth == false)
-            {
-                lastDepth = depth - 1;
-            }
-            else
-            {
-                std::cout << "info depth " << depth;
-                std::cout << " score cp " << currentScore;
-                std::cout << " time " << (get_current_time() - start_time).count() << "\n";
-            }
+            std::cout << "info depth " << depth;
+            std::cout << " score cp " << currentScore;
+            std::cout << " time " << (get_current_time() - start_time).count()/1000 << "\n";
         }
-        std::cout << "bestmove " << convertMoveToUci(pv_history.pv_list[lastDepth].moves[0]) << std::endl;
-        for (int i = 0; i < target_depth; i++){
+        std::cout << "bestmove " << convertMoveToUci(pv_history.pv_list[lastDepth].moves[0]) << "\n";
+        /*for (int i = 0; i < target_depth; i++){
             PV pv = pv_history.pv_list[i];
             std::cout << pv.length << std::endl;
             for (int i2 = 0; i2 < pv.length; i2++){
                 std::cout << "depth: " << i << " ";
                 std::cout << convertMoveToUci(pv.moves[i2]) << "\n";
             }
-        }
+        }*/
     }
 
     int score_move(Board& board, Move move, Move tt_move = NO_MOVE)
     {
         // Piece attacker = board.pieceAtB(from(move));
         Piece victim = board.pieceAtB(to(move));
+        Piece attacker = board.pieceAtB(from(move));
         if (move == tt_move)
         {
             return TT_SCORE;
@@ -301,7 +289,7 @@ public:
         }
         if (victim != None)
         {
-            return CAPTURE_SCORE - values[victim];
+            return values[victim] - values[attacker];
         }
         else
         {
