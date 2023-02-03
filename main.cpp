@@ -7,7 +7,7 @@ using namespace Chess;
 
 void uci_send_id()
 {
-    std::cout << "id name Julius 1.1.1\n";
+    std::cout << "id name Julius 1.2\n";
     std::cout << "id author Slender\n";
     std::cout << "uciok\n";
 }
@@ -17,12 +17,12 @@ void uci_check_time(std::istringstream &is, std::string &token, int64_t &wtime, 
     if (token == "wtime")
     {
         is >> std::skipws >> token;
-        wtime = std::stoi(token)*1000; // convert to microseconds
+        wtime = std::stoi(token) * 1000; // convert to microseconds
     }
     else if (token == "btime")
     {
         is >> std::skipws >> token;
-        btime = std::stoi(token)*1000;
+        btime = std::stoi(token) * 1000;
     }
 }
 
@@ -31,18 +31,23 @@ void uci_check_time_inc(std::istringstream &is, std::string &token, int64_t &win
     if (token == "winc")
     {
         is >> std::skipws >> token;
-        winc = std::stoi(token)*1000; // convert to microseconds
+        winc = std::stoi(token) * 1000; // convert to microseconds
     }
     else if (token == "binc")
     {
         is >> std::skipws >> token;
-        binc = std::stoi(token)*1000;
+        binc = std::stoi(token) * 1000;
     }
 }
 
-void start_uci(){
+/*void start_uci()
+{
+}*/
 
-}
+/*void start_search(Search& search, Board& board, int max_depth, bool timed)
+{
+    search.iterative_deepening(board, max_depth, timed);
+}*/
 
 int main()
 {
@@ -52,7 +57,7 @@ int main()
     Board board(DEFAULT_POS);
     std::string command;
     std::string token;
-    
+
     while (true)
     {
         std::cout.flush();
@@ -61,7 +66,8 @@ int main()
         std::getline(std::cin, command);
         std::istringstream is(command);
         is >> std::skipws >> token;
-        if (token == "stop"){
+        if (token == "stop")
+        {
             search.stop_timer();
             continue;
         }
@@ -99,10 +105,12 @@ int main()
 
                 while (is >> moveString)
                 {
-                    //std::cout << moveString << std::endl;
+                    // std::cout << moveString << std::endl;
                     board.makeMove(convertUciToMove(board, moveString));
                 }
-            }else{
+            }
+            else
+            {
                 is >> std::skipws >> option;
                 is >> std::skipws >> option;
                 is >> std::skipws >> option;
@@ -113,7 +121,7 @@ int main()
 
                 while (is >> moveString)
                 {
-                    //std::cout << moveString << std::endl;
+                    // std::cout << moveString << std::endl;
                     board.makeMove(convertUciToMove(board, moveString));
                 }
             }
@@ -126,7 +134,7 @@ int main()
             int64_t btime = 100000;
             int64_t winc = 1000;
             int64_t binc = 1000;
-            int64_t moveTime = 100*1000;
+            int64_t moveTime = 100 * 1000;
             if (token == "depth")
             {
                 is >> std::skipws >> token;
@@ -145,7 +153,7 @@ int main()
                 uci_check_time_inc(is, token, winc, binc);
                 moveTime = (board.sideToMove == Black) ? (btime / 20) + (binc / 2) : (wtime / 20) + (binc / 2);
                 search.set_timer(std::chrono::microseconds(wtime), std::chrono::microseconds(btime), std::chrono::microseconds(moveTime), std::chrono::microseconds(winc), std::chrono::microseconds(binc));
-                search.iterative_deepening(board, MAX_DEPTH, false);
+                search.iterative_deepening(board, MAX_DEPTH);
             }
             //}
             // is >> std::skipws >> token;
