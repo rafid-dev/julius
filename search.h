@@ -108,8 +108,11 @@ public:
         }
         return false;
     }
-    int quiesce(Board& board, int alpha, int beta, int ply)
+    int quiesce(Board& board, int alpha, int beta, int ply, bool is_timed = true)
     {
+        if (this->check_time() && is_timed){
+            return 0;
+        }
 
         if (ply >= MAX_DEPTH)
             return eval(board);
@@ -131,7 +134,7 @@ public:
 
             Move move = moveslist[i].move;
             board.makeMove(move);
-            int score = -this->quiesce(board, -beta, -alpha, ply + 1);
+            int score = -this->quiesce(board, -beta, -alpha, ply + 1, is_timed);
             board.unmakeMove(move);
 
             if (score > best)
@@ -151,13 +154,9 @@ public:
         return alpha;
     }
 
-    int alpha_beta(Board& board, PV &pv, int alpha, int beta, int depth, int ply, bool is_timed = true)
+    int alpha_beta(Board& board, PV &pv, int alpha, int beta, int depth, int ply, bool DO_NULL, bool is_timed = true)
     {
-        if (board.isRepetition()){
-            return 0;
-        }
-        if (this->check_time() && is_timed)
-        {
+        if (board.isRepetition() || (this->check_time() && is_timed)){
             return 0;
         }
         int best = -BEST_SCORE;
@@ -168,11 +167,26 @@ public:
         }
         if (depth == 0)
         {
-            return this->quiesce(board, alpha, beta, ply);
+            return this->quiesce(board, alpha, beta, ply, is_timed);
         }
 
-        int oldAlpha = alpha;
         PV local_pv;
+        if (depth >= 3 && DO_NULL && !board.isSquareAttacked(board.sideToMove == Black ? White : Black, board.KingSQ(board.sideToMove))){
+            board.makeNullMove();
+            best = -this->alpha_beta(board, local_pv, -beta, -beta+1, depth-2, ply + 1, false, is_timed);
+            board.unmakeNullMove();
+            if (this->check_time() && is_timed){
+                return 0;
+            }
+            if (best >= beta){
+                return beta;
+            }
+        }
+
+        best = -BEST_SCORE;
+        
+        int oldAlpha = alpha;
+        
         Movelist moveslist;
         Movegen::legalmoves<ALL>(board, moveslist);
 
@@ -217,7 +231,7 @@ public:
             Move move = moveslist[i].move;
             // std::cout << convertMoveToUci(move) << std::endl;
             board.makeMove(move);
-            int score = -this->alpha_beta(board, local_pv, -beta, -alpha, depth - 1, ply + 1);
+            int score = -this->alpha_beta(board, local_pv, -beta, -alpha, depth - 1, ply + 1, DO_NULL, is_timed);
             board.unmakeMove(move);
 
             if (score > best)
@@ -273,7 +287,7 @@ public:
                 break;
             }
             PV pv;
-            int currentScore = this->alpha_beta(board, pv, alpha, beta, depth, 0, is_timed);
+            int currentScore = this->alpha_beta(board, pv, alpha, beta, depth, 0, true, is_timed);
             pv_history.add_pv(pv, depth);
             if (this->check_time()){
                 lastDepth = depth - 1;
