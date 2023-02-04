@@ -234,10 +234,10 @@ public:
 
             if (depth > 3 && !isPVNode && i >= 4)
             {
-                int lmrScore = -this->alpha_beta(board, pv, -beta, -alpha, depth - 2, ply + 1, DO_NULL, is_timed);
+                int lmrScore = -alpha_beta(board, pv, -beta, -alpha, depth - 2, ply + 1, DO_NULL, is_timed);
                 if (lmrScore >= alpha)
                 {
-                    score = -this->alpha_beta(board, pv, -beta, -alpha, depth - 1, ply + 1, DO_NULL, is_timed);
+                    score = -alpha_beta(board, pv, -beta, -alpha, depth - 1, ply + 1, DO_NULL, is_timed);
                 }
                 else
                 {
@@ -251,7 +251,7 @@ public:
                 */
                 if (!isPVNode || i > 0)
                 {
-                    score = -this->alpha_beta(board, local_pv, -alpha - 1, -alpha, depth - 1, ply + 1, DO_NULL, is_timed);
+                    score = -alpha_beta(board, local_pv, -alpha - 1, -alpha, depth - 1, ply + 1, DO_NULL, is_timed);
                 }
 
                 /*
@@ -259,7 +259,7 @@ public:
                 */
                 if (isPVNode && ((score > alpha && score < beta) || i == 0))
                 {
-                    score = -this->alpha_beta(board, local_pv, -beta, -alpha, depth - 1, ply + 1, DO_NULL, is_timed);
+                    score = -alpha_beta(board, local_pv, -beta, -alpha, depth - 1, ply + 1, DO_NULL, is_timed);
                 }
             }
 
@@ -320,7 +320,7 @@ public:
             }
 
             PV pv;
-            int currentScore = this->alpha_beta(board, pv, alpha, beta, depth, 0, true, is_timed);
+            int currentScore = alpha_beta(board, pv, alpha, beta, depth, 0, true, is_timed);
             pv_history.add_pv(pv, depth);
             if (this->check_time())
             {
