@@ -1,58 +1,13 @@
 #pragma once
 
-#include <cstring>
 #include <algorithm>
 #include <chrono>
 #include "eval.h"
 #include "tt.h"
+#include "move_ordering.h"
+#include "pv.h"
 
 using namespace Chess;
-
-int mvv_lva[12][12] = {
- 	105, 205, 305, 405, 505, 605,  105, 205, 305, 405, 505, 605,
-	104, 204, 304, 404, 504, 604,  104, 204, 304, 404, 504, 604,
-	103, 203, 303, 403, 503, 603,  103, 203, 303, 403, 503, 603,
-	102, 202, 302, 402, 502, 602,  102, 202, 302, 402, 502, 602,
-	101, 201, 301, 401, 501, 601,  101, 201, 301, 401, 501, 601,
-	100, 200, 300, 400, 500, 600,  100, 200, 300, 400, 500, 600,
-
-	105, 205, 305, 405, 505, 605,  105, 205, 305, 405, 505, 605,
-	104, 204, 304, 404, 504, 604,  104, 204, 304, 404, 504, 604,
-	103, 203, 303, 403, 503, 603,  103, 203, 303, 403, 503, 603,
-	102, 202, 302, 402, 502, 602,  102, 202, 302, 402, 502, 602,
-	101, 201, 301, 401, 501, 601,  101, 201, 301, 401, 501, 601,
-	100, 200, 300, 400, 500, 600,  100, 200, 300, 400, 500, 600
-};
-
-struct PV
-{
-    int length = 0;
-    int score;
-    Move moves[256];
-
-    void load_from(Move m, const PV &rest)
-    {
-        moves[0] = m;
-        std::memcpy(moves + 1, rest.moves, sizeof(m) * rest.length);
-        length = rest.length + 1;
-    }
-};
-
-struct PVHistory
-{
-    int length = 0;
-    PV pv_list[256];
-    void add_pv(PV& pv, int depth){
-        pv_list[depth] = pv;
-        length += 1;
-    }
-    void clear(){
-        for (int i = 0; i < length;i++){
-            pv_list[i] = PV();
-        }
-        length = 0;
-    }
-};
 
 std::chrono::microseconds get_current_time()
 {
@@ -74,6 +29,11 @@ private:
     bool stop = false;
 
 public:
+    /*
+    
+        Time Management
+    
+    */
     void stop_timer(){
         this->stop = true;
     }
@@ -108,6 +68,11 @@ public:
         }
         return false;
     }
+
+
+    /*
+        Qsearch
+    */
     int quiesce(Board& board, int alpha, int beta, int ply, bool is_timed = true)
     {
         if (this->check_time() && is_timed){
@@ -153,6 +118,10 @@ public:
 
         return alpha;
     }
+
+    /*
+        Negamax with alpha beta.
+    */
     int alpha_beta(Board& board, PV &pv, int alpha, int beta, int depth, int ply, bool DO_NULL, bool is_timed = true)
     {
         if (board.isRepetition() || (this->check_time() && is_timed)){
@@ -209,7 +178,7 @@ public:
         TTEntry tte = transposition_table.probeEntry(hashKey);
 
         // Move scoring
-        this->give_moves_score(moveslist, tte.move, board);
+        MOVE_ORDER::give_moves_score(moveslist, tte.move, board);
         // Sorting moves
         std::sort(moveslist.list, moveslist.list + moveslist.size, [](ExtMove a, ExtMove b)
                   { return (a.value > b.value); });
@@ -292,10 +261,11 @@ public:
         return alpha;
     }
 
+    /* Iterative Deepening */
     void iterative_deepening(Board& board, int target_depth = 100, bool is_timed = true)
     {
-        int alpha = -100000;
-        int beta = 100000;
+        int alpha = -999999;
+        int beta = 999999;
         int lastDepth = 0;
         pv_history.clear();
         std::chrono::microseconds start_time = get_current_time();
@@ -303,13 +273,13 @@ public:
         {
             if (this->check_time() && is_timed)
             {
-                // std::cout << "TIME UP AT DEPTH " << depth << std::endl;
-                //  std::cout << "breaking" << std::endl;
                 break;
             }
+
             if (depth == MAX_DEPTH){
                 break;
             }
+            
             PV pv;
             int currentScore = this->alpha_beta(board, pv, alpha, beta, depth, 0, true, is_timed);
             pv_history.add_pv(pv, depth);
@@ -323,44 +293,5 @@ public:
             }
         }
         std::cout << "bestmove " << convertMoveToUci(pv_history.pv_list[lastDepth].moves[0]) << "\n";
-        /*for (int i = 0; i < target_depth; i++){
-            PV pv = pv_history.pv_list[i];
-            std::cout << pv.length << std::endl;
-            for (int i2 = 0; i2 < pv.length; i2++){
-                std::cout << "depth: " << i << " ";
-                std::cout << convertMoveToUci(pv.moves[i2]) << "\n";
-            }
-        }*/
-    }
-
-    int score_move(Board& board, Move move, Move tt_move = NO_MOVE)
-    {
-        // Piece attacker = board.pieceAtB(from(move));
-        Piece victim = board.pieceAtB(to(move));
-        Piece attacker = board.pieceAtB(from(move));
-        if (move == tt_move)
-        {
-            return TT_SCORE;
-        }
-        if (promoted(move))
-        {
-            return PROMOTED_SCORE;
-        }
-        if (victim != None)
-        {
-            return mvv_lva[attacker][victim];
-        }
-        else
-        {
-            return 0;
-        }
-    }
-
-    void give_moves_score(Movelist& movelist, Move ttmove, Board& board)
-    {
-        for (int i = 0; i < int(movelist.size); i++)
-        {
-            movelist[i].value = this->score_move(board, movelist[i].move, ttmove);
-        }
     }
 };
