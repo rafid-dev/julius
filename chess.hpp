@@ -571,8 +571,8 @@ struct State
 
 struct ExtMove
 {
-    int value = 0;
-    Move move = NO_MOVE;
+    int value;
+    Move move;
 };
 
 inline constexpr bool operator==(const ExtMove &a, const ExtMove &b)
@@ -592,7 +592,7 @@ inline constexpr bool operator<(const ExtMove &a, const ExtMove &b)
 
 struct Movelist
 {
-    ExtMove list[MAX_MOVES] = {};
+    ExtMove list[MAX_MOVES];
     uint8_t size = 0;
     typedef ExtMove *iterator;
     typedef const ExtMove *const_iterator;
@@ -609,6 +609,9 @@ struct Movelist
         return list[i];
     }
 
+    /// @brief
+    /// @param m
+    /// @return -1 if move was not found
     inline constexpr int find(Move m)
     {
         for (int i = 0; i < size; i++)
@@ -680,43 +683,9 @@ inline Square msb(U64 b)
     return (Square)idx;
 }
 
-#else // MSVC, WIN32
-#include <intrin.h>
-inline Square lsb(U64 b)
-{
-    unsigned long idx;
-
-    if (b & 0xffffffff)
-    {
-        _BitScanForward(&idx, int32_t(b));
-        return Square(idx);
-    }
-    else
-    {
-        _BitScanForward(&idx, int32_t(b >> 32));
-        return Square(idx + 32);
-    }
-}
-
-inline Square msb(U64 b)
-{
-    unsigned long idx;
-
-    if (b >> 32)
-    {
-        _BitScanReverse(&idx, int32_t(b >> 32));
-        return Square(idx + 32);
-    }
-    else
-    {
-        _BitScanReverse(&idx, int32_t(b));
-        return Square(idx);
-    }
-}
-
 #endif
 
-#else // Compiler is neither GCC nor MSVC compatible
+#else
 
 #error "Compiler not supported."
 
@@ -728,7 +697,7 @@ inline uint8_t popcount(U64 mask)
 
     return (uint8_t)_mm_popcnt_u64(mask);
 
-#else // Assumed gcc or compatible compiler
+#else
 
     return __builtin_popcountll(mask);
 
@@ -964,7 +933,7 @@ class Board
     /// @return found piece otherwise None
     Piece pieceAtB(Square sq) const;
 
-    /// @brief applys a new Fen to the board and also reload the entire nnue
+    /// @brief applys a new Fen to the board
     /// @param fen
     void applyFen(const std::string &fen);
 
@@ -1057,7 +1026,7 @@ class Board
 
     U64 attacksByPiece(PieceType pt, Square sq, Color c) const;
 
-    friend std::ostream &operator<<(std::ostream &os, const Board &b);
+    friend inline std::ostream &operator<<(std::ostream &os, const Board &b);
 
   private:
     /// @brief calculate the current zobrist hash from scratch
@@ -1368,10 +1337,7 @@ inline void Board::makeMove(Move move)
     fullMoveNumber++;
 
     bool ep = to_sq == enPassantSquare;
-    const bool isCastlingWhite =
-        (p == WhiteKing && capture == WhiteRook) || (p == WhiteKing && square_distance(to_sq, from_sq) >= 2);
-    const bool isCastlingBlack =
-        (p == BlackKing && capture == BlackRook) || (p == BlackKing && square_distance(to_sq, from_sq) >= 2);
+    const bool isCastling = pt == KING && type_of_piece(capture) == ROOK && colorOf(from_sq) == colorOf(to_sq);
 
     // *****************************
     // UPDATE HASH
@@ -1383,7 +1349,7 @@ inline void Board::makeMove(Move move)
 
     hashKey ^= updateKeyCastling();
 
-    if (isCastlingWhite || isCastlingBlack)
+    if (isCastling)
     {
         Piece rook = sideToMove == White ? WhiteRook : BlackRook;
         Square rookSQ = file_rank_square(to_sq > from_sq ? FILE_F : FILE_D, square_rank(from_sq));
@@ -1406,14 +1372,14 @@ inline void Board::makeMove(Move move)
         halfMoveClock = 0;
         if (ep)
         {
-            hashKey ^= updateKeyPiece(makePiece(PAWN, ~sideToMove), Square(to_sq - (sideToMove * -2 + 1) * 8));
+            hashKey ^= updateKeyPiece(makePiece(PAWN, ~sideToMove), Square(to_sq ^ 8));
         }
         else if (std::abs(from_sq - to_sq) == 16)
         {
-            U64 epMask = PawnAttacks(Square(to_sq - (sideToMove * -2 + 1) * 8), sideToMove);
+            U64 epMask = PawnAttacks(Square(to_sq ^ 8), sideToMove);
             if (epMask & pieces(PAWN, ~sideToMove))
             {
-                enPassantSquare = Square(to_sq - (sideToMove * -2 + 1) * 8);
+                enPassantSquare = Square(to_sq ^ 8);
                 hashKey ^= updateKeyEnPassant(enPassantSquare);
 
                 assert(pieceAtB(enPassantSquare) == None);
@@ -1421,7 +1387,7 @@ inline void Board::makeMove(Move move)
         }
     }
 
-    if (capture != None && !(isCastlingWhite || isCastlingBlack))
+    if (capture != None && !isCastling)
     {
         halfMoveClock = 0;
         hashKey ^= updateKeyPiece(capture, to_sq);
@@ -1446,30 +1412,28 @@ inline void Board::makeMove(Move move)
     hashKey ^= updateKeyCastling();
 
     // *****************************
-    // UPDATE PIECES AND NNUE
+    // UPDATE PIECES
     // *****************************
 
-    if (isCastlingWhite || isCastlingBlack)
+    if (isCastling)
     {
-        Square rookToSq;
-        Piece rook = sideToMove == White ? WhiteRook : BlackRook;
+        const Piece rook = sideToMove == White ? WhiteRook : BlackRook;
+        Square rookToSq = file_rank_square(to_sq > from_sq ? FILE_F : FILE_D, square_rank(from_sq));
+        Square kingToSq = file_rank_square(to_sq > from_sq ? FILE_G : FILE_C, square_rank(from_sq));
 
         removePiece(p, from_sq);
         removePiece(rook, to_sq);
 
-        rookToSq = file_rank_square(to_sq > from_sq ? FILE_F : FILE_D, square_rank(from_sq));
-        to_sq = file_rank_square(to_sq > from_sq ? FILE_G : FILE_C, square_rank(from_sq));
-
-        placePiece(p, to_sq);
+        placePiece(p, kingToSq);
         placePiece(rook, rookToSq);
     }
     else if (pt == PAWN && ep)
     {
-        assert(pieceAtB(Square(to_sq - (sideToMove * -2 + 1) * 8)) != None);
+        assert(pieceAtB(Square(to_sq ^ 8)) != None);
 
-        removePiece(makePiece(PAWN, ~sideToMove), Square(to_sq - (sideToMove * -2 + 1) * 8));
+        removePiece(makePiece(PAWN, ~sideToMove), Square(to_sq ^ 8));
     }
-    else if (capture != None && !(isCastlingWhite || isCastlingBlack))
+    else if (capture != None && !isCastling)
     {
         assert(pieceAtB(to_sq) != None);
 
@@ -1483,7 +1447,7 @@ inline void Board::makeMove(Move move)
         removePiece(makePiece(PAWN, sideToMove), from_sq);
         placePiece(p, to_sq);
     }
-    else if (!(isCastlingWhite || isCastlingBlack))
+    else if (!isCastling)
     {
         assert(pieceAtB(to_sq) == None);
 
@@ -1516,12 +1480,9 @@ inline void Board::unmakeMove(Move move)
     PieceType pt = piece(move);
     Piece p = makePiece(pt, sideToMove);
 
-    const bool isCastlingWhite =
-        (p == WhiteKing && capture == WhiteRook) || (p == WhiteKing && square_distance(to_sq, from_sq) >= 2);
-    const bool isCastlingBlack =
-        (p == BlackKing && capture == BlackRook) || (p == BlackKing && square_distance(to_sq, from_sq) >= 2);
+    const bool isCastling = (p == WhiteKing && capture == WhiteRook) || (p == BlackKing && capture == BlackRook);
 
-    if (isCastlingWhite || isCastlingBlack)
+    if (isCastling)
     {
         Square rookToSq = to_sq;
         Piece rook = sideToMove == White ? WhiteRook : BlackRook;
@@ -1553,7 +1514,7 @@ inline void Board::unmakeMove(Move move)
         int8_t offset = sideToMove == White ? -8 : 8;
         placePiece(makePiece(PAWN, ~sideToMove), Square(enPassantSquare + offset));
     }
-    else if (capture != None && !(isCastlingWhite || isCastlingBlack))
+    else if (capture != None && !isCastling)
     {
         placePiece(capture, to_sq);
     }
@@ -1632,7 +1593,7 @@ inline U64 Board::attacksByPiece(PieceType pt, Square sq, Color c) const
     }
 }
 
-std::ostream &operator<<(std::ostream &os, const Board &b)
+inline std::ostream &operator<<(std::ostream &os, const Board &b)
 {
     for (int i = 63; i >= 0; i -= 8)
     {

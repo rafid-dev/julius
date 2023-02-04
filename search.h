@@ -17,6 +17,11 @@ std::chrono::microseconds get_current_time()
 TranspositionTable transposition_table(16 * 1024 * 1024);
 PVHistory pv_history;
 
+bool is_check(Board &board, Color side)
+{
+    return board.isSquareAttacked(~side, board.KingSQ(side));
+}
+
 class Search
 {
 private:
@@ -30,11 +35,12 @@ private:
 
 public:
     /*
-    
+
         Time Management
-    
+
     */
-    void stop_timer(){
+    void stop_timer()
+    {
         this->stop = true;
     }
     void set_timer(std::chrono::microseconds wtime, std::chrono::microseconds btime, std::chrono::microseconds timePerMove, std::chrono::microseconds winc = std::chrono::microseconds(0), std::chrono::microseconds binc = std::chrono::microseconds(0))
@@ -69,13 +75,13 @@ public:
         return false;
     }
 
-
     /*
         Qsearch
     */
-    int quiesce(Board& board, int alpha, int beta, int ply, bool is_timed = true)
+    int quiesce(Board &board, int alpha, int beta, int ply, bool is_timed = true)
     {
-        if (this->check_time() && is_timed){
+        if (this->check_time() && is_timed)
+        {
             return 0;
         }
 
@@ -122,13 +128,14 @@ public:
     /*
         Negamax with alpha beta.
     */
-    int alpha_beta(Board& board, PV &pv, int alpha, int beta, int depth, int ply, bool DO_NULL, bool is_timed = true)
+    int alpha_beta(Board &board, PV &pv, int alpha, int beta, int depth, int ply, bool DO_NULL, bool is_timed = true)
     {
-        if (board.isRepetition() || (this->check_time() && is_timed)){
+        if (board.isRepetition() || (this->check_time() && is_timed))
+        {
             return 0;
         }
         int best = -BEST_SCORE;
-        bool isPVNode = beta-alpha != 1;
+        bool isPVNode = beta - alpha != 1;
 
         if (ply > MAX_DEPTH - 1)
         {
@@ -140,33 +147,36 @@ public:
         }
 
         PV local_pv;
-        
-        /* 
+
+        /*
         Null Move pruning
         */
-        if (depth >= 3 && DO_NULL && !board.isSquareAttacked(board.sideToMove == Black ? White : Black, board.KingSQ(board.sideToMove))){
+        if (depth >= 3 && DO_NULL && !is_check(board, board.sideToMove))
+        {
             board.makeNullMove();
-            best = -this->alpha_beta(board, local_pv, -beta, -beta+1, depth-2, ply + 1, false, is_timed);
+            best = -this->alpha_beta(board, local_pv, -beta, -beta + 1, depth - 2, ply + 1, false, is_timed);
             board.unmakeNullMove();
-            if (this->check_time() && is_timed){
+            if (this->check_time() && is_timed)
+            {
                 return 0;
             }
-            if (best >= beta){
+            if (best >= beta)
+            {
                 return beta;
             }
         }
 
         best = -BEST_SCORE;
-        
+
         int oldAlpha = alpha;
-        
+
         Movelist moveslist;
         Movegen::legalmoves<ALL>(board, moveslist);
 
         // Checkmate and stalemate detection
         if (moveslist.size == 0)
         {
-            if (board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove)))
+            if (is_check(board, board.sideToMove))
             {
                 return -MATE_SCORE + ply;
             }
@@ -212,19 +222,47 @@ public:
             int score;
 
             /*
-                Null window search if non pv node.
+                Late move reduction (LMR): reduce moves that we think are bad
+
+                Conditions are:
+                depth > 3
+                move number >= 4
+                no checks
+                no capture move or promotion move
+                not pv node
             */
-            if (!isPVNode || i > 0){
-                score = -this->alpha_beta(board, local_pv, -alpha-1, -alpha, depth-1, ply+1, DO_NULL, is_timed);
+
+            if (depth > 3 && !isPVNode && i >= 4)
+            {
+                int lmrScore = -this->alpha_beta(board, pv, -beta, -alpha, depth - 2, ply + 1, DO_NULL, is_timed);
+                if (lmrScore >= alpha)
+                {
+                    score = -this->alpha_beta(board, pv, -beta, -alpha, depth - 1, ply + 1, DO_NULL, is_timed);
+                }
+                else
+                {
+                    score = lmrScore;
+                }
+            }
+            else
+            {
+                /*
+                    Null window search if non pv node.
+                */
+                if (!isPVNode || i > 0)
+                {
+                    score = -this->alpha_beta(board, local_pv, -alpha - 1, -alpha, depth - 1, ply + 1, DO_NULL, is_timed);
+                }
+
+                /*
+                    Principal variation search (PVS).
+                */
+                if (isPVNode && ((score > alpha && score < beta) || i == 0))
+                {
+                    score = -this->alpha_beta(board, local_pv, -beta, -alpha, depth - 1, ply + 1, DO_NULL, is_timed);
+                }
             }
 
-            /*
-                Principal variation search (PVS).
-            */
-            if (isPVNode && ((score > alpha && score < beta) || i == 0)){
-                score = -this->alpha_beta(board, local_pv, -beta, -alpha, depth - 1, ply + 1, DO_NULL, is_timed);
-            }
-            
             board.unmakeMove(move);
 
             if (score > best)
@@ -262,7 +300,7 @@ public:
     }
 
     /* Iterative Deepening */
-    void iterative_deepening(Board& board, int target_depth = 100, bool is_timed = true)
+    void iterative_deepening(Board &board, int target_depth = 100, bool is_timed = true)
     {
         int alpha = -999999;
         int beta = 999999;
@@ -276,20 +314,24 @@ public:
                 break;
             }
 
-            if (depth == MAX_DEPTH){
+            if (depth == MAX_DEPTH)
+            {
                 break;
             }
-            
+
             PV pv;
             int currentScore = this->alpha_beta(board, pv, alpha, beta, depth, 0, true, is_timed);
             pv_history.add_pv(pv, depth);
-            if (this->check_time()){
+            if (this->check_time())
+            {
                 lastDepth = depth - 1;
-            }else{
+            }
+            else
+            {
                 lastDepth = depth;
                 std::cout << "info depth " << depth;
                 std::cout << " score cp " << currentScore;
-                std::cout << " time " << (get_current_time() - start_time).count()/1000 << "\n";
+                std::cout << " time " << (get_current_time() - start_time).count() / 1000 << "\n";
             }
         }
         std::cout << "bestmove " << convertMoveToUci(pv_history.pv_list[lastDepth].moves[0]) << "\n";
