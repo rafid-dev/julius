@@ -234,15 +234,7 @@ public:
 
             if (depth > 3 && !isPVNode && i >= 4)
             {
-                int lmrScore = -alpha_beta(board, pv, -beta, -alpha, depth - 2, ply + 1, DO_NULL, is_timed);
-                if (lmrScore >= alpha)
-                {
-                    score = -alpha_beta(board, pv, -beta, -alpha, depth - 1, ply + 1, DO_NULL, is_timed);
-                }
-                else
-                {
-                    score = lmrScore;
-                }
+                score = -alpha_beta(board, local_pv, -beta, -alpha, depth - 2, ply + 1, DO_NULL, is_timed);
             }
             else
             {
