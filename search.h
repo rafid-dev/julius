@@ -28,9 +28,9 @@ struct PV
 {
     int length = 0;
     int score;
-    Chess::Move moves[256];
+    Move moves[256];
 
-    void load_from(Chess::Move m, const PV &rest)
+    void load_from(Move m, const PV &rest)
     {
         moves[0] = m;
         std::memcpy(moves + 1, rest.moves, sizeof(m) * rest.length);
@@ -153,13 +153,13 @@ public:
 
         return alpha;
     }
-
     int alpha_beta(Board& board, PV &pv, int alpha, int beta, int depth, int ply, bool DO_NULL, bool is_timed = true)
     {
         if (board.isRepetition() || (this->check_time() && is_timed)){
             return 0;
         }
         int best = -BEST_SCORE;
+        bool isPVNode = beta-alpha != 1;
 
         if (ply > MAX_DEPTH - 1)
         {
@@ -171,6 +171,10 @@ public:
         }
 
         PV local_pv;
+        
+        /* 
+        Null Move pruning
+        */
         if (depth >= 3 && DO_NULL && !board.isSquareAttacked(board.sideToMove == Black ? White : Black, board.KingSQ(board.sideToMove))){
             board.makeNullMove();
             best = -this->alpha_beta(board, local_pv, -beta, -beta+1, depth-2, ply + 1, false, is_timed);
@@ -190,13 +194,27 @@ public:
         Movelist moveslist;
         Movegen::legalmoves<ALL>(board, moveslist);
 
+        // Checkmate and stalemate detection
+        if (moveslist.size == 0)
+        {
+            if (board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove)))
+            {
+                return -MATE_SCORE + ply;
+            }
+            return DRAW_SCORE;
+        }
+
+        // TT entry
         U64 hashKey = board.hashKey;
         TTEntry tte = transposition_table.probeEntry(hashKey);
 
+        // Move scoring
         this->give_moves_score(moveslist, tte.move, board);
+        // Sorting moves
         std::sort(moveslist.list, moveslist.list + moveslist.size, [](ExtMove a, ExtMove b)
                   { return (a.value > b.value); });
 
+        // TT flag and scoring
         if ((ply != 0) && (hashKey == tte.key) && (tte.depth >= depth))
         {
             if (tte.flag == EXACTBOUND)
@@ -217,21 +235,27 @@ public:
             }
         }
 
-        if (moveslist.size == 0)
-        {
-            if (board.isSquareAttacked(~board.sideToMove, board.KingSQ(board.sideToMove)))
-            {
-                return -MATE_SCORE + ply;
-            }
-            return DRAW_SCORE;
-        }
-
         for (int i = 0; i < int(moveslist.size); i++)
         {
             Move move = moveslist[i].move;
             // std::cout << convertMoveToUci(move) << std::endl;
             board.makeMove(move);
-            int score = -this->alpha_beta(board, local_pv, -beta, -alpha, depth - 1, ply + 1, DO_NULL, is_timed);
+            int score;
+
+            /*
+                Null window search if non pv node.
+            */
+            if (!isPVNode || i > 0){
+                score = -this->alpha_beta(board, local_pv, -alpha-1, -alpha, depth-1, ply+1, DO_NULL, is_timed);
+            }
+
+            /*
+                Principal variation search (PVS).
+            */
+            if (isPVNode && ((score > alpha && score < beta) || i == 0)){
+                score = -this->alpha_beta(board, local_pv, -beta, -alpha, depth - 1, ply + 1, DO_NULL, is_timed);
+            }
+            
             board.unmakeMove(move);
 
             if (score > best)
