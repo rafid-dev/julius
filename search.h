@@ -166,7 +166,7 @@ public:
         bool isPVNode = beta - alpha != 1;
 
         if (ply > MAX_DEPTH - 1)
-        {
+        { 
             return eval(board);
         }
         if (depth == 0)
