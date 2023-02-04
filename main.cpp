@@ -7,7 +7,7 @@ using namespace Chess;
 
 void uci_send_id()
 {
-    std::cout << "id name Julius v1.5.0\n";
+    std::cout << "id name LMR\n";
     std::cout << "id author Slender\n";
     std::cout << "uciok\n";
 }
@@ -52,6 +52,7 @@ void uci_check_time_inc(std::istringstream &is, std::string &token, int64_t &win
 int main()
 {
     init_tables();
+    initSearch();
     // main game loop
     Search search;
     Board board(DEFAULT_POS);
@@ -151,7 +152,8 @@ int main()
                 uci_check_time_inc(is, token, winc, binc);
                 is >> std::skipws >> token;
                 uci_check_time_inc(is, token, winc, binc);
-                moveTime = (board.sideToMove == Black) ? (btime / 20) + (binc / 2) : (wtime / 20) + (winc / 2);
+                moveTime = (board.sideToMove == Black) ? std::min((btime / 20) + (binc / 2), btime) : std::min((wtime / 20) + (winc / 2), wtime);
+                
                 search.set_timer(std::chrono::microseconds(wtime), std::chrono::microseconds(btime), std::chrono::microseconds(moveTime), std::chrono::microseconds(winc), std::chrono::microseconds(binc));
                 search.iterative_deepening(board, MAX_DEPTH);
             }

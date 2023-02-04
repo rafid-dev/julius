@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include "eval.h"
 #include "tt.h"
 #include "move_ordering.h"
@@ -16,6 +17,28 @@ std::chrono::microseconds get_current_time()
 
 TranspositionTable transposition_table(16 * 1024 * 1024);
 PVHistory pv_history;
+
+int LMRTable[64][64];
+int LateMovePruningCounts[2][9];
+
+void initSearch()
+{
+
+    // Init Late Move Reductions Table
+    for (int depth = 1; depth < 64; depth++)
+    {
+        for (int played = 1; played < 64; played++)
+        {
+            LMRTable[depth][played] = 0.75 + log(depth) * log(played) / 2.25;
+        }
+    }
+
+    for (int depth = 1; depth < 9; depth++)
+    {
+        LateMovePruningCounts[0][depth] = 2.5 + 2 * depth * depth / 4.5;
+        LateMovePruningCounts[1][depth] = 4.0 + 4 * depth * depth / 4.5;
+    }
+}
 
 bool is_check(Board &board, Color side)
 {
@@ -86,8 +109,9 @@ public:
         }
 
         if (ply >= MAX_DEPTH)
+        {
             return eval(board);
-
+        }
         int best = eval(board);
         if (best >= beta)
         {
@@ -105,7 +129,7 @@ public:
 
             Move move = moveslist[i].move;
             board.makeMove(move);
-            int score = -this->quiesce(board, -beta, -alpha, ply + 1, is_timed);
+            int score = -quiesce(board, -beta, -alpha, ply + 1, is_timed);
             board.unmakeMove(move);
 
             if (score > best)
@@ -130,7 +154,11 @@ public:
     */
     int alpha_beta(Board &board, PV &pv, int alpha, int beta, int depth, int ply, bool DO_NULL, bool is_timed = true)
     {
-        if (board.isRepetition() || (this->check_time() && is_timed))
+        if (board.isRepetition())
+        {
+            return DRAW_SCORE - ply;
+        }
+        if (this->check_time() && is_timed)
         {
             return 0;
         }
@@ -143,7 +171,7 @@ public:
         }
         if (depth == 0)
         {
-            return this->quiesce(board, alpha, beta, ply, is_timed);
+            return quiesce(board, alpha, beta, ply, is_timed);
         }
 
         PV local_pv;
@@ -218,6 +246,7 @@ public:
         {
             Move move = moveslist[i].move;
             // std::cout << convertMoveToUci(move) << std::endl;
+            bool is_capture = board.pieceAtB(to(move)) != None;
             board.makeMove(move);
             int score;
 
@@ -231,27 +260,32 @@ public:
                 no capture move or promotion move
                 not pv node
             */
-            if (depth > 3 && !isPVNode && i >= 4)
+
+            bool do_full_search = false;
+            if (depth > 3 && i >= 4 && !is_check(board, board.sideToMove) && !is_capture)
             {
-                score = -alpha_beta(board, local_pv, -beta, -alpha, depth - 2, ply + 1, DO_NULL, is_timed);
+                int lmrDepth = std::max(0, depth - LMRTable[std::min(depth, 63)][std::min(ply, 63)]);
+                score = -alpha_beta(board, local_pv, -alpha - 1, -alpha, depth - lmrDepth, ply + 1, DO_NULL, is_timed);
+                do_full_search = score >= alpha && lmrDepth != 1;
             }
             else
             {
-                /*
-                    Null window search if non pv node.
-                */
-                if (!isPVNode || i > 0)
-                {
-                    score = -alpha_beta(board, local_pv, -alpha - 1, -alpha, depth - 1, ply + 1, DO_NULL, is_timed);
-                }
+                do_full_search = !isPVNode || i > 0;
+            }
 
-                /*
-                    Principal variation search (PVS).
-                */
-                if (isPVNode && ((score > alpha && score < beta) || i == 0))
-                {
-                    score = -alpha_beta(board, local_pv, -beta, -alpha, depth - 1, ply + 1, DO_NULL, is_timed);
-                }
+            /*
+            Search with reduced window but full depth.
+            */
+            if (do_full_search)
+            {
+                score = -alpha_beta(board, local_pv, -alpha - 1, -alpha, depth - 1, ply + 1, DO_NULL, is_timed);
+            }
+            /*
+                Principal variation search (PVS).
+            */
+            if (isPVNode && ((score > alpha && score < beta) || i == 0))
+            {
+                score = -alpha_beta(board, local_pv, -beta, -alpha, depth - 1, ply + 1, DO_NULL, is_timed);
             }
 
             board.unmakeMove(move);
