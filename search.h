@@ -231,7 +231,6 @@ public:
                 no capture move or promotion move
                 not pv node
             */
-
             if (depth > 3 && !isPVNode && i >= 4)
             {
                 score = -alpha_beta(board, local_pv, -beta, -alpha, depth - 2, ply + 1, DO_NULL, is_timed);
