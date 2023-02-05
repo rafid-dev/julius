@@ -51,7 +51,6 @@ void uci_check_time_inc(std::istringstream &is, std::string &token, int64_t &win
 
 int main()
 {
-    init_tables();
     initSearch();
     // main game loop
     Search search;
@@ -146,7 +145,7 @@ int main()
                 is >> std::skipws >> token;
                 search.set_timer(std::chrono::microseconds(wtime), std::chrono::milliseconds(btime), std::chrono::milliseconds(INT32_MAX), std::chrono::milliseconds(winc), std::chrono::milliseconds(binc));
                 int target_depth = stoi(token);
-                search.iterative_deepening(board, target_depth);
+                search.iterative_deepening(board, target_depth, false);
             }
             else
             {
@@ -160,7 +159,7 @@ int main()
                 moveTime = (board.sideToMove == Black) ? std::min((btime / 20) + (binc / 2), btime) : std::min((wtime / 20) + (winc / 2), wtime);
                 
                 search.set_timer(std::chrono::microseconds(wtime), std::chrono::microseconds(btime), std::chrono::microseconds(moveTime), std::chrono::microseconds(winc), std::chrono::microseconds(binc));
-                search.iterative_deepening(board, MAX_DEPTH);
+                search.iterative_deepening(board, MAX_DEPTH, true);
             }
             //}
             // is >> std::skipws >> token;
