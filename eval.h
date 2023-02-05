@@ -5,8 +5,6 @@
 #define BEST_SCORE 999999999
 #define MATE_SCORE 9999999
 #define DRAW_SCORE 0
-#define TT_SCORE 1000000
-#define PROMOTED_SCORE 50000
 #define MAX_DEPTH 64
 
 int values[6] = {100,300, 300, 500, 900, 0};

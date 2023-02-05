@@ -2,14 +2,16 @@
 
 using namespace Chess;
 
-enum Flag : uint8_t{
+enum Flag : uint8_t
+{
     NONEBOUND,
     UPPERBOUND,
     LOWERBOUND,
     EXACTBOUND
 };
 
-struct TTEntry {
+struct TTEntry
+{
     U64 key = 0;
     int score = 0;
     Move move = NO_MOVE;
@@ -17,20 +19,28 @@ struct TTEntry {
     Flag flag = NONEBOUND;
 };
 
-class TranspositionTable{
-    private:
+uint32_t reduce_hash(uint32_t x, uint32_t N)
+{
+    return ((uint64_t)x * (uint64_t)N) >> 32;
+}
+
+class TranspositionTable
+{
+private:
     std::vector<TTEntry> entries;
 
-    public:
-    TranspositionTable(int usersize){
-        this->entries.resize(usersize/sizeof(TTEntry), TTEntry());
+public:
+    TranspositionTable(int usersize)
+    {
+        this->entries.resize(usersize / sizeof(TTEntry), TTEntry());
         TTEntry e;
         std::fill(entries.begin(), entries.end(), e);
     };
 
-    void storeEntry (U64 key,Flag f, Move move, int depth, int bestScore){
+    void storeEntry(U64 key, Flag f, Move move, int depth, int bestScore)
+    {
         int n = this->entries.size();
-        int i = key%n;
+        int i = reduce_hash(key, n);
         TTEntry entry;
         entry.score = bestScore;
         entry.flag = f;
@@ -40,9 +50,15 @@ class TranspositionTable{
         this->entries[i] = entry;
     }
 
-    TTEntry probeEntry (U64 key){
+    TTEntry probeEntry(U64 key)
+    {
         int n = this->entries.size();
-        int i = key%n;
+        int i = reduce_hash(key, n);
         return this->entries[i];
+    }
+    void clear()
+    {
+        TTEntry e;
+        std::fill(entries.begin(), entries.end(), e);
     }
 };

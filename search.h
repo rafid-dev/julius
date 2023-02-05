@@ -54,9 +54,30 @@ private:
     std::chrono::microseconds binc;
     std::chrono::microseconds lastTime = get_current_time();
     std::chrono::microseconds timePerMove;
+    Move killers[MAX_DEPTH][2];
     bool stop = false;
 
 public:
+    /*
+        clear everything for new game;
+    */
+   void new_game(){
+    transposition_table.clear();
+    this->killers[MAX_DEPTH][0] = NO_MOVE;
+    this->killers[MAX_DEPTH][1] = NO_MOVE;
+    pv_history.clear();
+   }
+    /*
+        Storing killers
+    */
+   void store_killer(int ply, Move move){
+    if (this->killers[ply][0] == NO_MOVE){
+        this->killers[ply][0] = move;
+    }else if (this->killers[ply][0] != move){
+        this->killers[ply][1] = this->killers[ply][0];
+        this->killers[ply][0] = move;
+    }
+   }
     /*
 
         Time Management
@@ -216,7 +237,12 @@ public:
         TTEntry tte = transposition_table.probeEntry(hashKey);
 
         // Move scoring
-        MOVE_ORDER::give_moves_score(moveslist, tte.move, board);
+        MoveInfo move_info;
+        move_info.tt_move = tte.move;
+        move_info.Killers[0] = this->killers[ply][0];
+        move_info.Killers[1] = this->killers[ply][1];
+        
+        MOVE_ORDER::give_moves_score(moveslist, move_info, board);
         // Sorting moves
         std::sort(moveslist.list, moveslist.list + moveslist.size, [](ExtMove a, ExtMove b)
                   { return (a.value > b.value); });
@@ -262,10 +288,11 @@ public:
             */
 
             bool do_full_search = false;
-            if (depth > 3 && i >= 4 && !is_check(board, board.sideToMove) && !is_capture)
+            if (depth > 3 && i >= 4 && !is_check(board, board.sideToMove) && !is_capture && !promoted(move))
             {
-                int lmrDepth = std::max(0, depth - LMRTable[std::min(depth, 63)][std::min(ply, 63)]);
-                score = -alpha_beta(board, local_pv, -alpha - 1, -alpha, depth - lmrDepth, ply + 1, DO_NULL, is_timed);
+                int lmrDepth = LMRTable[depth][i+1];
+                lmrDepth = std::clamp(depth-lmrDepth, 1, depth+1);
+                score = -alpha_beta(board, local_pv, -alpha - 1, -alpha, lmrDepth, ply + 1, DO_NULL, is_timed);
                 do_full_search = score >= alpha && lmrDepth != 1;
             }
             else
@@ -297,8 +324,11 @@ public:
                 {
                     alpha = score;
                     pv.load_from(move, pv);
-                    if (score >= beta)
+                    if (alpha >= beta)
                     {
+                        if (!is_capture){
+                            store_killer(ply, move);
+                        }
                         break;
                     }
                 }
