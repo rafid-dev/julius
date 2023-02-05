@@ -55,29 +55,35 @@ private:
     std::chrono::microseconds lastTime = get_current_time();
     std::chrono::microseconds timePerMove;
     Move killers[MAX_DEPTH][2];
+    History history;
     bool stop = false;
 
 public:
     /*
         clear everything for new game;
     */
-   void new_game(){
-    transposition_table.clear();
-    this->killers[MAX_DEPTH][0] = NO_MOVE;
-    this->killers[MAX_DEPTH][1] = NO_MOVE;
-    pv_history.clear();
-   }
+    void new_game()
+    {
+        transposition_table.clear();
+        this->killers[MAX_DEPTH][0] = NO_MOVE;
+        this->killers[MAX_DEPTH][1] = NO_MOVE;
+        pv_history.clear();
+    }
     /*
         Storing killers
     */
-   void store_killer(int ply, Move move){
-    if (this->killers[ply][0] == NO_MOVE){
-        this->killers[ply][0] = move;
-    }else if (this->killers[ply][0] != move){
-        this->killers[ply][1] = this->killers[ply][0];
-        this->killers[ply][0] = move;
+    void store_killer(int ply, Move move)
+    {
+        if (this->killers[ply][0] == NO_MOVE)
+        {
+            this->killers[ply][0] = move;
+        }
+        else if (this->killers[ply][0] != move)
+        {
+            this->killers[ply][1] = this->killers[ply][0];
+            this->killers[ply][0] = move;
+        }
     }
-   }
     /*
 
         Time Management
@@ -183,11 +189,8 @@ public:
         {
             return 0;
         }
-        int best = -BEST_SCORE;
-        bool isPVNode = beta - alpha != 1;
-
         if (ply > MAX_DEPTH - 1)
-        { 
+        {
             return eval(board);
         }
         if (depth == 0)
@@ -195,7 +198,11 @@ public:
             return quiesce(board, alpha, beta, ply, is_timed);
         }
 
+        int best = -BEST_SCORE;
+        bool isPVNode = beta - alpha != 1;
         PV local_pv;
+        this->killers[MAX_DEPTH][0] = NO_MOVE;
+        this->killers[MAX_DEPTH][1] = NO_MOVE;
 
         /*
         Null Move pruning
@@ -218,7 +225,6 @@ public:
         best = -BEST_SCORE;
 
         int oldAlpha = alpha;
-
         Movelist moveslist;
         Movegen::legalmoves<ALL>(board, moveslist);
 
@@ -239,10 +245,11 @@ public:
         // Move scoring
         MoveInfo move_info;
         move_info.tt_move = tte.move;
-        move_info.Killers[0] = this->killers[ply][0];
-        move_info.Killers[1] = this->killers[ply][1];
-        
-        MOVE_ORDER::give_moves_score(moveslist, move_info, board);
+        move_info.Killers[0] = killers[ply][0];
+        move_info.Killers[1] = killers[ply][1];
+        int depth_bonus = depthBonus(depth);
+
+        MOVE_ORDER::give_moves_score(moveslist, move_info, history, board);
         // Sorting moves
         std::sort(moveslist.list, moveslist.list + moveslist.size, [](ExtMove a, ExtMove b)
                   { return (a.value > b.value); });
@@ -288,17 +295,17 @@ public:
             */
 
             bool do_full_search = false;
-            if (depth > 3 && i >= 4 && !is_check(board, board.sideToMove) && !is_capture && !promoted(move))
-            {
-                int lmrDepth = LMRTable[depth][i+1];
-                lmrDepth = std::clamp(depth-lmrDepth, 1, depth+1);
-                score = -alpha_beta(board, local_pv, -alpha - 1, -alpha, lmrDepth, ply + 1, DO_NULL, is_timed);
-                do_full_search = score >= alpha && lmrDepth != 1;
-            }
-            else
-            {
+            //if (depth > 3 && i >= 4 && !is_check(board, board.sideToMove) && !is_capture && !promoted(move))
+            //{
+            //    int lmrDepth = LMRTable[depth][i + 1];
+            //    lmrDepth = std::clamp(depth - lmrDepth, 1, depth + 1);
+            //    score = -alpha_beta(board, local_pv, -alpha - 1, -alpha, lmrDepth, ply + 1, DO_NULL, is_timed);
+            ///   do_full_search = score >= alpha && lmrDepth != 1;
+            //}
+            //else
+            //{
                 do_full_search = !isPVNode || i > 0;
-            }
+            //}
 
             /*
             Search with reduced window but full depth.
@@ -324,10 +331,12 @@ public:
                 {
                     alpha = score;
                     pv.load_from(move, pv);
-                    if (alpha >= beta)
+                    if (score >= beta)
                     {
-                        if (!is_capture){
+                        if (!is_capture)
+                        {
                             store_killer(ply, move);
+                            history.add(board.sideToMove, move, depth_bonus);
                         }
                         break;
                     }
@@ -361,6 +370,7 @@ public:
         int beta = 999999;
         int lastDepth = 0;
         pv_history.clear();
+
         std::chrono::microseconds start_time = get_current_time();
         for (int depth = 1; depth <= target_depth; depth++)
         {
@@ -368,7 +378,8 @@ public:
             {
                 break;
             }
-
+            this->killers[MAX_DEPTH][0] = NO_MOVE;
+            this->killers[MAX_DEPTH][1] = NO_MOVE;
             if (depth == MAX_DEPTH)
             {
                 break;

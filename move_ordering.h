@@ -1,9 +1,24 @@
 #include "chess.hpp"
 
 #define TT_SCORE 1000000
-#define PROMOTED_SCORE 50000
+#define PROMOTED_SCORE 90000
+#define MVVLVA_OFFSET 50000
 #define KILLER1 40000
 #define KILLER2 35000
+
+int depthBonus (int depth){
+    return std::min(2000, depth*155);
+}
+
+struct History {
+    int list[2][64][64];
+    void add (Color side, Move move, int db){
+        list[side][int(from(move))][int(to(move))] += db;
+    }
+    int index (Color side, Move move){
+        return list[side][int(from(move))][int(to(move))];
+    }
+};
 
 struct MoveInfo
 {
@@ -28,7 +43,7 @@ namespace MOVE_ORDER
         101, 201, 301, 401, 501, 601, 101, 201, 301, 401, 501, 601,
         100, 200, 300, 400, 500, 600, 100, 200, 300, 400, 500, 600};
 
-    int score_move(Board &board, Move move, MoveInfo moveInfo)
+    int score_move(Board &board, Move move, MoveInfo moveInfo, History& history)
     {
         // Piece attacker = board.pieceAtB(from(move));
         Piece victim = board.pieceAtB(to(move));
@@ -43,7 +58,7 @@ namespace MOVE_ORDER
         }
         if (victim != None)
         {
-            return mvv_lva[attacker][victim];
+            return MVVLVA_OFFSET + mvv_lva[attacker][victim];
         }
         else if (move == moveInfo.Killers[0])
         {
@@ -55,14 +70,14 @@ namespace MOVE_ORDER
         }
         else
         {
-            return 0;
+            return 0;//history.index(board.sideToMove, move);
         }
     }
-    void give_moves_score(Movelist &movelist, MoveInfo moveInfo, Board &board)
+    void give_moves_score(Movelist &movelist, MoveInfo moveInfo, History& history, Board &board)
     {
         for (int i = 0; i < int(movelist.size); i++)
         {
-            movelist[i].value = score_move(board, movelist[i].move, moveInfo);
+            movelist[i].value = score_move(board, movelist[i].move, moveInfo, history);
         }
     }
 }
