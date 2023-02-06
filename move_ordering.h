@@ -1,6 +1,7 @@
 #pragma once
 
 #include "chess.hpp"
+#include <cstring>
 
 #define TT_SCORE 1000000
 #define PROMOTED_SCORE 90000
@@ -17,9 +18,8 @@ struct History
     {
         list[side][int(from(move))][int(to(move))] += db;
     }
-    int index(Chess::Color side, Chess::Move move)
-    {
-        return list[side][int(from(move))][int(to(move))];
+    void clear(){
+        memset(list, 0, sizeof(list));
     }
 };
 
