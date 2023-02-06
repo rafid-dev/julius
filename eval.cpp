@@ -1,6 +1,8 @@
 #include "chess.hpp"
 #include "eval.h"
 
+using namespace Chess;
+
 int mg_table[12][64];
 int eg_table[12][64];
 int values[6] = {100,300, 300, 500, 900, 0};
@@ -160,9 +162,9 @@ int* eg_pesto_table[6] =
 };
 
 void init_tables(){
-    for (Chess::Piece pc = Chess::WhitePawn;pc < Chess::BlackPawn; pc++){
-        Chess::PieceType p = Chess::PieceToPieceType[pc];
-        for (Chess::Square sq = Chess::SQ_A1; sq < Chess::NO_SQ; sq++) {
+    for (Piece pc = WhitePawn;pc < BlackPawn; pc++){
+        PieceType p = PieceToPieceType[pc];
+        for (Square sq = SQ_A1; sq < NO_SQ; sq++) {
             mg_table[pc][sq] = mg_value[p] + mg_pesto_table[p][sq];
             eg_table[pc][sq] = eg_value[p] + eg_pesto_table[p][sq];
             mg_table[pc+6][sq] = mg_value[p] + mg_pesto_table[p][sq^56];
@@ -171,41 +173,171 @@ void init_tables(){
     }
 }
 
-int eval(Chess::Board& board){
+int pawnstable[64] = {
+     0,  0,  0,  0,  0,  0,  0,  0,
+50, 50, 50, 50, 50, 50, 50, 50,
+10, 10, 20, 30, 30, 20, 10, 10,
+ 5,  5, 10, 25, 25, 10,  5,  5,
+ 0,  0,  0, 20, 20,  0,  0,  0,
+ 5, -5,-10,  0,  0,-10, -5,  5,
+ 5, 10, 10,-20,-20, 10, 10,  5,
+ 0,  0,  0,  0,  0,  0,  0,  0
+};
+
+int knightstable[64] = {
+    -50,-40,-30,-30,-30,-30,-40,-50,
+-40,-20,  0,  0,  0,  0,-20,-40,
+-30,  0, 10, 15, 15, 10,  0,-30,
+-30,  5, 15, 20, 20, 15,  5,-30,
+-30,  0, 15, 20, 20, 15,  0,-30,
+-30,  5, 10, 15, 15, 10,  5,-30,
+-40,-20,  0,  5,  5,  0,-20,-40,
+-50,-40,-30,-30,-30,-30,-40,-50,
+};
+
+int bishopstable[64] = {
+    -20,-10,-10,-10,-10,-10,-10,-20,
+-10,  0,  0,  0,  0,  0,  0,-10,
+-10,  0,  5, 10, 10,  5,  0,-10,
+-10,  5,  5, 10, 10,  5,  5,-10,
+-10,  0, 10, 10, 10, 10,  0,-10,
+-10, 10, 10, 10, 10, 10, 10,-10,
+-10,  5,  0,  0,  0,  0,  5,-10,
+-20,-10,-10,-10,-10,-10,-10,-20,
+};
+
+int rookstable[64] = {
+      0,  0,  0,  0,  0,  0,  0,  0,
+  5, 10, 10, 10, 10, 10, 10,  5,
+ -5,  0,  0,  0,  0,  0,  0, -5,
+ -5,  0,  0,  0,  0,  0,  0, -5,
+ -5,  0,  0,  0,  0,  0,  0, -5,
+ -5,  0,  0,  0,  0,  0,  0, -5,
+ -5,  0,  0,  0,  0,  0,  0, -5,
+  0,  0,  0,  5,  5,  0,  0,  0
+};
+
+int queenstable[64] = {
+    -20,-10,-10, -5, -5,-10,-10,-20,
+-10,  0,  0,  0,  0,  0,  0,-10,
+-10,  0,  5,  5,  5,  5,  0,-10,
+ -5,  0,  5,  5,  5,  5,  0, -5,
+  0,  0,  5,  5,  5,  5,  0, -5,
+-10,  5,  5,  5,  5,  5,  0,-10,
+-10,  0,  5,  0,  0,  0,  0,-10,
+-20,-10,-10, -5, -5,-10,-10,-20
+};
+
+int kingstable[64] = {
+    -30,-40,-40,-50,-50,-40,-40,-30,
+-30,-40,-40,-50,-50,-40,-40,-30,
+-30,-40,-40,-50,-50,-40,-40,-30,
+-30,-40,-40,-50,-50,-40,-40,-30,
+-20,-30,-30,-40,-40,-30,-30,-20,
+-10,-20,-20,-20,-20,-20,-20,-10,
+ 20, 20,  0,  0,  0,  0, 20, 20,
+ 20, 30, 10,  0,  0, 10, 30, 20
+};
+
+int simple_eval (Board& board){
+    int material = 0;
+    int ptsq = 0;
+
+    int blackPtsq = 0;
+    int whitePtsq = 0;
+
+    int whiteScore = 0;
+    int blackScore = 0;
+
+    U64 white = board.Us(White);
+    U64 black = board.Us(Black);
+
+    while (white)
+    {
+        Square sq = poplsb(white);
+        PieceType p = board.pieceTypeAtB(sq);
+        
+        switch(p)
+        {
+            case PAWN: whitePtsq += pawnstable[sq^56]; whiteScore += values[PAWN]; break;
+            case KNIGHT: whitePtsq += knightstable[sq^56]; whiteScore += values[KNIGHT]; break;
+            case BISHOP: whitePtsq += bishopstable[sq^56]; whiteScore += values[BISHOP]; break;
+            case ROOK: whitePtsq += rookstable[sq^56]; whiteScore += values[ROOK]; break;
+            case QUEEN: whitePtsq += queenstable[sq^56]; whiteScore += values[QUEEN]; break;
+            case KING: whitePtsq += kingstable[sq^56];break;
+            case NONETYPE: break;
+        }
+    }
+
+    while (black){
+        Square sq = poplsb(black);
+        PieceType p = board.pieceTypeAtB(sq);
+
+        switch(p)
+        {
+            case PAWN:
+             blackPtsq += pawnstable[sq]; 
+             blackScore += values[PAWN]; break;
+            case KNIGHT: 
+            blackPtsq += knightstable[sq]; 
+            blackScore += values[KNIGHT]; break;
+            case BISHOP:
+            blackPtsq += bishopstable[sq]; 
+            blackScore += values[BISHOP]; break;
+            case ROOK: 
+            blackPtsq += rookstable[sq]; 
+            blackScore += values[ROOK]; break;
+            case QUEEN: 
+            blackPtsq += queenstable[sq]; 
+            blackScore += values[QUEEN]; break;
+            case KING: 
+            blackPtsq += kingstable[sq]; break;
+            case NONETYPE: break;
+        }
+    }
+    
+    material = whiteScore - blackScore;
+    ptsq = whitePtsq - blackPtsq;
+    return (board.sideToMove == Black) ? (ptsq + material)*-1 : ptsq + material;
+}
+
+int eval(Board& board){
     int mg[2];
     int eg[2];
     int gamePhase = 0;
 
-    Chess::Color side2move = board.sideToMove;
-    Chess::Color otherSide = (side2move == Chess::Black) ? Chess::White : Chess::Black;
+    Color side2move = board.sideToMove;
+    Color otherSide = ~board.sideToMove;
 
-    mg[Chess::White] = 0;
-    mg[Chess::Black] = 0;
-    eg[Chess::White] = 0;
-    eg[Chess::Black] = 0;
+    mg[White] = 0;
+    mg[Black] = 0;
+    eg[White] = 0;
+    eg[Black] = 0;
 
-    U64 white = board.Us(Chess::White);
-    U64 black = board.Us(Chess::Black);
+    U64 white = board.Us(White);
+    U64 black = board.Us(Black);
 
     while (white){
-        Chess::Square sq = Chess::poplsb(white);
-        Chess::Piece p = board.pieceAtB(sq);
-        mg[Chess::White] += mg_table[p][sq];
-        eg[Chess::White] += eg_table[p][sq];
+        Square sq = poplsb(white);
+        Piece p = board.pieceAtB(sq);
+        
+        mg[White] += mg_table[p][sq^56];
+        eg[White] += eg_table[p][sq^56];
         gamePhase += gamephaseInc[p];
 
     }
 
     while (black){
-        Chess::Square sq = Chess::poplsb(black);
-        Chess::Piece p = board.pieceAtB(sq);
-        mg[Chess::Black] += mg_table[p][sq];
-        eg[Chess::Black] += eg_table[p][sq];
+        Square sq = poplsb(black);
+        Piece p = board.pieceAtB(sq);
+        
+        mg[Black] += mg_table[p][sq^56];
+        eg[Black] += eg_table[p][sq^56];
         gamePhase += gamephaseInc[p];
     }
 
 
-    /* tapered eval */
+    // tapered eval //
     int mgScore = mg[side2move] - mg[otherSide];
     int egScore = eg[side2move] - eg[otherSide];
     int mgPhase = gamePhase;

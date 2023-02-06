@@ -7,7 +7,7 @@ using namespace Chess;
 
 void uci_send_id()
 {
-    std::cout << "id name Julius V1.5.1 RFP\n";
+    std::cout << "id name Julius history\n";
     std::cout << "id author Slender\n";
     std::cout << "uciok\n";
 }
@@ -183,6 +183,9 @@ int main()
                 std::cout << convertMoveToUci(moveslist[i].move) << std::endl;
             }
             continue;
+        }
+        if (token == "testeval"){
+            std::cout << eval(board) << std::endl;
         }
     }
 

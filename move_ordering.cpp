@@ -27,33 +27,32 @@ int score_move(Chess::Board &board, Chess::Move move, MoveInfo moveInfo, History
     // Piece attacker = board.pieceAtB(from(move));
     Chess::Piece victim = board.pieceAtB(Chess::to(move));
     Chess::Piece attacker = board.pieceAtB(Chess::from(move));
-    int score = 0;
     if (move == moveInfo.tt_move)
     {
-        return score += TT_SCORE;
+        return TT_SCORE;
     }
     if (Chess::promoted(move))
     {
-        return score += PROMOTED_SCORE + pcvalues[piece(move)];
+        return PROMOTED_SCORE + pcvalues[piece(move)];
     }
     if (victim != Chess::None)
     {
-        return score += MVVLVA_OFFSET + mvv_lva[attacker][victim];
+        return MVVLVA_OFFSET + mvv_lva[attacker][victim];
     }
     else if (move == moveInfo.Killers[0])
     {
-        score += KILLER1;
+        return KILLER1;
     }
     else if (move == moveInfo.Killers[1])
     {
-        score += KILLER2;
+        return KILLER2;
     }
     else
     {
         //printf("%d\n", history.list[board.sideToMove][from(move)][to(move)]);
-        return 0;//return history.list[board.sideToMove][from(move)][to(move)];
+        return history.list[board.sideToMove][from(move)][to(move)];
     }
-    return score;
+    return 0;
 }
 
 void give_moves_score(Chess::Movelist &movelist, MoveInfo moveInfo, History &history, Chess::Board &board)

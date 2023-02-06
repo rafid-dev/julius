@@ -3,11 +3,16 @@
 
 using namespace Chess;
 
-int LMRTable[64][64];
+int LMRTable[MAX_DEPTH][MAX_DEPTH];
 int LateMovePruningCounts[2][9];
 
 TranspositionTable transposition_table(16 * 1024 * 1024);
-PVHistory pv_history;
+
+// PV length
+int pv_length[MAX_DEPTH];
+
+// PV table
+Move pv_table[MAX_DEPTH][MAX_DEPTH];
 
 std::chrono::microseconds get_current_time()
 {
@@ -18,9 +23,9 @@ void initSearch()
 {
     init_tables();
     // Init Late Move Reductions Table
-    for (int depth = 1; depth < 64; depth++)
+    for (int depth = 1; depth < MAX_DEPTH; depth++)
     {
-        for (int played = 1; played < 64; played++)
+        for (int played = 1; played < MAX_DEPTH; played++)
         {
             LMRTable[depth][played] = 0.75 + log(depth) * log(played) / 2.25;
         }
@@ -46,9 +51,10 @@ Search::Search()
 void Search::new_game()
 {
     transposition_table.clear();
+    memset(pv_length, 0, sizeof(pv_length));
     this->killers[MAX_DEPTH][0] = NO_MOVE;
     this->killers[MAX_DEPTH][1] = NO_MOVE;
-    pv_history.clear();
+    history.clear();
 }
 
 void Search::store_killer(int ply, Move move)
@@ -98,7 +104,7 @@ bool Search::check_time()
 
 int Search::quiesce(Board &board, int alpha, int beta, int ply, int &nodes, bool is_timed = true)
 {
-    if (this->check_time() && is_timed && nodes % 1024 == 0)
+    if (this->check_time() && is_timed && nodes & 1023)
     {
         return 0;
     }
@@ -127,7 +133,7 @@ int Search::quiesce(Board &board, int alpha, int beta, int ply, int &nodes, bool
         nodes++;
         int score = -quiesce(board, -beta, -alpha, ply + 1, nodes, is_timed);
         board.unmakeMove(move);
-        if (this->check_time() && is_timed && nodes % 1024 == 0)
+        if (this->check_time() && is_timed && nodes & 1023)
         {
             return 0;
         }
@@ -148,13 +154,14 @@ int Search::quiesce(Board &board, int alpha, int beta, int ply, int &nodes, bool
     return alpha;
 }
 
-int Search::alpha_beta(Board &board, PV &pv, int alpha, int beta, int depth, int ply, int &nodes, bool DO_NULL, bool is_timed = true)
+int Search::alpha_beta(Board &board, int alpha, int beta, int depth, int ply, int &nodes, bool DO_NULL, bool is_timed = true)
 {
+    pv_length[ply] = ply;
     if (board.isRepetition())
     {
         return DRAW_SCORE - ply;
     }
-    if (this->check_time() && is_timed && nodes % 1024 == 0)
+    if (this->check_time() && is_timed && nodes & 1023)
     {
         return 0;
     }
@@ -169,7 +176,7 @@ int Search::alpha_beta(Board &board, PV &pv, int alpha, int beta, int depth, int
 
     int best = -BEST_SCORE;
     bool isPVNode = beta - alpha != 1;
-    PV local_pv;
+
     this->killers[MAX_DEPTH][0] = NO_MOVE;
     this->killers[MAX_DEPTH][1] = NO_MOVE;
     int posEval = eval(board);
@@ -185,10 +192,11 @@ int Search::alpha_beta(Board &board, PV &pv, int alpha, int beta, int depth, int
         if (depth >= 3 && DO_NULL)
         {
             board.makeNullMove();
-            best = -this->alpha_beta(board, local_pv, -beta, -beta + 1, depth - 2, ply + 1, nodes, false, is_timed);
+            best = -this->alpha_beta(board, -beta, -beta + 1, depth - 2, ply + 1, nodes, false, is_timed);
             board.unmakeNullMove();
-            if (this->check_time() && is_timed && nodes % 1024 == 0)
+            if (this->check_time() && is_timed && nodes & 1023)
             {
+
                 return 0;
             }
             if (best >= beta)
@@ -274,37 +282,38 @@ int Search::alpha_beta(Board &board, PV &pv, int alpha, int beta, int depth, int
             not pv node
         */
 
-        // bool do_full_search = false;
-        //  if (depth > 3 && i >= 4 && !is_check(board, board.sideToMove) && !is_capture && !promoted(move))
-        //{
-        //      int lmrDepth = LMRTable[depth][i + 1];
-        //      lmrDepth = std::clamp(depth - lmrDepth, 1, depth + 1);
-        //      score = -alpha_beta(board, local_pv, -alpha - 1, -alpha, lmrDepth, ply + 1, DO_NULL, is_timed);
-        ///   do_full_search = score >= alpha && lmrDepth != 1;
-        //}
-        // else
-        //{
-        // do_full_search = !isPVNode || i > 0;
-        //}
+        /*bool do_full_search = false;
+        if (depth > 3 && i >= 4 && !is_check(board, board.sideToMove) && !is_capture && !promoted(move))
+        {
+            int lmrDepth = LMRTable[depth][i + 1];
+            lmrDepth = std::clamp(depth - lmrDepth, 1, depth + 1);
+            score = -alpha_beta(board, -alpha - 1, -alpha, lmrDepth, ply + 1, nodes, DO_NULL, is_timed);
+            do_full_search = score >= alpha && lmrDepth != 1;
+        }
+        else
+        {
+            do_full_search = !isPVNode || i > 0;
+        }*/
 
         /*
         Search with reduced window but full depth.
         */
         if (!isPVNode || i > 0)
         {
-            score = -alpha_beta(board, local_pv, -alpha - 1, -alpha, depth - 1, ply + 1, nodes, DO_NULL, is_timed);
+            score = -alpha_beta(board, -alpha - 1, -alpha, depth - 1, ply + 1, nodes, DO_NULL, is_timed);
         }
         /*
             Principal variation search (PVS).
         */
         if (isPVNode && ((score > alpha && score < beta) || i == 0))
         {
-            score = -alpha_beta(board, local_pv, -beta, -alpha, depth - 1, ply + 1, nodes, DO_NULL, is_timed);
+            score = -alpha_beta(board, -beta, -alpha, depth - 1, ply + 1, nodes, DO_NULL, is_timed);
         }
 
         board.unmakeMove(move);
-        if (this->check_time() && is_timed && nodes % 1024 == 0)
+        if (this->check_time() && is_timed && nodes & 1024)
         {
+
             return 0;
         }
         if (score > best)
@@ -313,18 +322,31 @@ int Search::alpha_beta(Board &board, PV &pv, int alpha, int beta, int depth, int
             if (score > alpha)
             {
                 alpha = score;
-                pv.load_from(move, pv);
+
+                // write PV move
+                pv_table[ply][ply] = move;
+
+                // loop over the next ply
+                for (int next_ply = ply + 1; next_ply < pv_length[ply + 1]; next_ply++)
+                    // copy move from deeper ply into a current ply's line
+                    pv_table[ply][next_ply] = pv_table[ply + 1][next_ply];
+
+                // adjust PV length
+                pv_length[ply] = pv_length[ply + 1];
+
                 if (score >= beta)
                 {
                     if (!is_capture)
                     {
                         store_killer(ply, move);
-                        // history.add(board.sideToMove, move, depth_bonus);
+                        history.add(board.sideToMove, move, depth*depth);
                     }
                     break;
                 }
             }
         }
+        //no beta cutoff so we substract from history
+        history.add(board.sideToMove, move, -(depth*depth));
     }
 
     Flag bound = NONEBOUND;
@@ -342,7 +364,7 @@ int Search::alpha_beta(Board &board, PV &pv, int alpha, int beta, int depth, int
         bound = EXACTBOUND;
     }
 
-    transposition_table.storeEntry(hashKey, bound, pv.moves[0], depth, best);
+    transposition_table.storeEntry(hashKey, bound, pv_table[0][0], depth, best);
     return alpha;
 }
 
@@ -351,8 +373,6 @@ void Search::iterative_deepening(Board &board, int target_depth = 100, bool is_t
     int alpha = -999999;
     int beta = 999999;
     int lastDepth = 0;
-    pv_history.clear();
-    history.clear();
     std::chrono::microseconds start_time = get_current_time();
     int nodes = 0;
     for (int depth = 1; depth <= target_depth; depth++)
@@ -367,13 +387,21 @@ void Search::iterative_deepening(Board &board, int target_depth = 100, bool is_t
         {
             break;
         }
-        PV pv;
-        int currentScore = alpha_beta(board, pv, alpha, beta, depth, 0, nodes, true, is_timed);
-        pv_history.pv_list[depth] = pv;
+        int currentScore = alpha_beta(board, alpha, beta, depth, 0, nodes, true, is_timed);
         lastDepth = (this->check_time() && is_timed) ? depth - 1 : depth;
         std::cout << "info depth " << depth;
         std::cout << " score cp " << currentScore;
-        std::cout << " time " << (get_current_time() - start_time).count() / 1000 << " nodes " << nodes << " pv " << convertMoveToUci(pv.moves[0]) << "\n";
+        std::cout << " time " << (get_current_time() - start_time).count() / 1000 << " nodes " << nodes << " pv ";
+
+        // loop over the moves within a PV line
+        for (int i = 0; i < pv_length[0]; i++)
+        {
+            // print PV move
+            std::cout << convertMoveToUci(pv_table[0][i]) << " ";
+        }
+        std::cout << "\n";
     }
-    std::cout << "bestmove " << convertMoveToUci(pv_history.pv_list[lastDepth].moves[0]) << "\n";
+    // pv_history.pv_list[lastDepth].print();
+    std::cout << "bestmove " << convertMoveToUci(pv_table[0][0]) << "\n";
+    history.clear();
 }

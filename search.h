@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
-#include "pv.h"
 #include "tt.h"
 #include "move_ordering.h"
 #include "eval.h"
@@ -60,7 +59,7 @@ Search();
     /*
         Negamax with alpha beta.
     */
-    int alpha_beta(Board &board, PV &pv, int alpha, int beta, int depth, int ply, int& nodes, bool DO_NULL, bool is_timed);
+    int alpha_beta(Board &board, int alpha, int beta, int depth, int ply, int& nodes, bool DO_NULL, bool is_timed);
     /* Iterative Deepening */
     void iterative_deepening(Board &board, int target_depth, bool is_timed);
 };
