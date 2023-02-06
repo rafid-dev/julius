@@ -291,8 +291,9 @@ int Search::alpha_beta(Board &board, int alpha, int beta, int depth, int ply, in
             lmrDepth += !isPVNode;
             // increase for king moves that evade check
             lmrDepth += is_check(board, board.sideToMove) && board.pieceTypeAtB(to(move)) == KING;
+            lmrDepth = std::max(1, lmrDepth);
             //lmrDepth -= (move == killers[ply][0]) || (move == killers[ply][1]);
-            score = -alpha_beta(board, -alpha - 1, -alpha, lmrDepth, ply + 1, nodes, DO_NULL, is_timed);
+            score = -alpha_beta(board, -alpha - 1, -alpha, depth-lmrDepth, ply + 1, nodes, DO_NULL, is_timed);
             do_full_search = score > alpha && lmrDepth != 1;
         }
         else
