@@ -7,7 +7,7 @@ using namespace Chess;
 
 void uci_send_id()
 {
-    std::cout << "id name Julius history\n";
+    std::cout << "id name Julius LMR\n";
     std::cout << "id author Slender\n";
     std::cout << "uciok\n";
 }

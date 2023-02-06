@@ -32,7 +32,6 @@ private:
     Move killers[MAX_DEPTH][2];
     History history;
     bool stop = false;
-
 public:
 Search();
     /*

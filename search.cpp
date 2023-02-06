@@ -282,23 +282,28 @@ int Search::alpha_beta(Board &board, int alpha, int beta, int depth, int ply, in
             not pv node
         */
 
-        /*bool do_full_search = false;
-        if (depth > 3 && i >= 4 && !is_check(board, board.sideToMove) && !is_capture && !promoted(move))
+        bool do_full_search = false;
+
+        if (depth > 3 && i >= 5 && !is_capture && !promoted(move))
         {
-            int lmrDepth = LMRTable[depth][i + 1];
-            lmrDepth = std::clamp(depth - lmrDepth, 1, depth + 1);
+            int lmrDepth = LMRTable[std::min(depth, 64)][std::min(i, 63)];
+            // increase for non pv nodes
+            lmrDepth += !isPVNode;
+            // increase for king moves that evade check
+            lmrDepth += is_check(board, board.sideToMove) && board.pieceTypeAtB(to(move)) == KING;
+            //lmrDepth -= (move == killers[ply][0]) || (move == killers[ply][1]);
             score = -alpha_beta(board, -alpha - 1, -alpha, lmrDepth, ply + 1, nodes, DO_NULL, is_timed);
-            do_full_search = score >= alpha && lmrDepth != 1;
+            do_full_search = score > alpha && lmrDepth != 1;
         }
         else
         {
             do_full_search = !isPVNode || i > 0;
-        }*/
+        }
 
         /*
         Search with reduced window but full depth.
         */
-        if (!isPVNode || i > 0)
+        if (do_full_search)
         {
             score = -alpha_beta(board, -alpha - 1, -alpha, depth - 1, ply + 1, nodes, DO_NULL, is_timed);
         }
