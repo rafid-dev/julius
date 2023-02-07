@@ -102,7 +102,7 @@ bool Search::check_time()
     return false;
 }
 
-int Search::quiesce(Board &board, int alpha, int beta, int ply, int &nodes, bool is_timed = true)
+int Search::quiesce(Board &board, int alpha, int beta, int ply, int &nodes, bool promoting, bool is_timed = true)
 {
     if (this->check_time() && is_timed && nodes & 1023)
     {
@@ -118,6 +118,17 @@ int Search::quiesce(Board &board, int alpha, int beta, int ply, int &nodes, bool
     {
         return beta;
     }
+
+    // Delta pruning
+    /*int BIG_DELTA = 975;
+    if (promoting){
+        BIG_DELTA += 775;
+    }
+
+    if (best < alpha - BIG_DELTA){
+        return alpha;
+    }*/
+
     if (best > alpha)
     {
         alpha = best;
@@ -131,7 +142,7 @@ int Search::quiesce(Board &board, int alpha, int beta, int ply, int &nodes, bool
         Move move = moveslist[i].move;
         board.makeMove(move);
         nodes++;
-        int score = -quiesce(board, -beta, -alpha, ply + 1, nodes, is_timed);
+        int score = -quiesce(board, -beta, -alpha, ply + 1, nodes, promoted(move), is_timed);
         board.unmakeMove(move);
         if (this->check_time() && is_timed && nodes & 1023)
         {
@@ -171,7 +182,7 @@ int Search::alpha_beta(Board &board, int alpha, int beta, int depth, int ply, in
     }
     if (depth == 0)
     {
-        return quiesce(board, alpha, beta, ply, nodes, is_timed);
+        return quiesce(board, alpha, beta, ply, nodes, false, is_timed);
     }
 
     int best = -BEST_SCORE;
@@ -179,7 +190,13 @@ int Search::alpha_beta(Board &board, int alpha, int beta, int depth, int ply, in
 
     this->killers[MAX_DEPTH][0] = NO_MOVE;
     this->killers[MAX_DEPTH][1] = NO_MOVE;
+
     int posEval = eval(board);
+    if (!is_check(board, board.sideToMove)){
+        static_evals[ply] = posEval;
+    }
+
+    bool improving = !is_check(board, board.sideToMove) && posEval > (static_evals[ply - 2]);
 
     if (!isPVNode && !is_check(board, board.sideToMove))
     {

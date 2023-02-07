@@ -32,6 +32,7 @@ private:
     Move killers[MAX_DEPTH][2];
     History history;
     bool stop = false;
+    int static_evals[MAX_DEPTH];
 public:
 Search();
     /*
@@ -54,7 +55,7 @@ Search();
     /*
         Qsearch
     */
-    int quiesce(Board &board, int alpha, int beta, int ply, int& nodes, bool is_timed);
+    int quiesce(Board &board, int alpha, int beta, int ply, int& nodes, bool promoting, bool is_timed);
     /*
         Negamax with alpha beta.
     */
